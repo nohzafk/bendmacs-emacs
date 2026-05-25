@@ -66,7 +66,8 @@ build_dep() {
 # CLI args also act as a stage filter: ./build.sh emacs
 ALL_STAGES=(
   m4 autoconf automake libtool pkgconf texinfo libiconv libunistring
-  gettext ncurses zlib libxml2 gmp nettle libidn2 gnutls treesitter gzip emacs
+  gettext ncurses zlib libwebp libxml2 gmp nettle libidn2 gnutls treesitter
+  gzip emacs
 )
 
 if [[ $# -gt 0 ]]; then
@@ -87,6 +88,7 @@ stage_libiconv()     { build_dep "GNU Libiconv"      lib/libiconv.a       https:
 stage_libunistring() { build_dep "GNU Libunistring"  lib/libunistring.a   https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.xz                 libunistring-1.4.2 -- --disable-shared; }
 stage_gettext()      { build_dep "GNU Gettext"       bin/msgfmt           https://ftpmirror.gnu.org/gnu/gettext/gettext-0.26.tar.xz                            gettext-0.26    -- --disable-shared; }
 stage_libxml2()      { build_dep "Libxml2"           lib/libxml2.a        https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.2.tar.xz                libxml2-2.15.2  -- --disable-shared; }
+stage_libwebp()      { build_dep "Libwebp"           lib/libwebp.a        https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz libwebp-1.6.0 -- --disable-shared; }
 stage_gmp()          { build_dep "GNU GMP"           lib/libgmp.a         https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz                                   gmp-6.3.0       -- --disable-shared; }
 stage_nettle()       { build_dep "Nettle"            lib/libnettle.a      https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz                            nettle-3.10.2   -- --disable-shared; }
 stage_libidn2()      { build_dep "Libidn2"           lib/libidn2.a        https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz                            libidn2-2.3.8   -- --disable-shared; }
@@ -204,6 +206,7 @@ stage_emacs() {
               --with-threads                   \
               --with-toolkit-scroll-bars       \
               --with-tree-sitter               \
+              --with-webp                      \
               --with-xml2                      \
               --with-zlib
   make -j"$JOBS"

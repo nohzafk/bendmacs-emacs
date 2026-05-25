@@ -102,6 +102,12 @@ jobs:
           tar -Jxf zlib-1.3.2.tar.xz && cd zlib-1.3.2
           ./configure --static && make -j4
           sudo make install
+      - name: Install Libwebp
+        run: |
+          curl $CURL_OPTS -O https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz
+          tar -zxf libwebp-1.6.0.tar.gz && cd libwebp-1.6.0
+          ./configure --disable-shared && make -j4
+          sudo make install
       - name: Install Libxml2
         run: |
           curl $CURL_OPTS -O https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.2.tar.xz
@@ -177,6 +183,7 @@ jobs:
                                       --with-threads                  \
                                       --with-toolkit-scroll-bars      \
                                       --with-tree-sitter              \
+                                      --with-webp                     \
                                       --with-xml2                     \
                                       --with-zlib
           make -j4

@@ -31,6 +31,7 @@ Emacs is built with:
 - GnuTLS
 - Tree-sitter
 - libxml2
+- WebP
 - zlib
 - Native Image API
 - Dynamic modules support
@@ -69,4 +70,3 @@ database at `/usr/share/terminfo`. Without this, the compiled-in search path
 only includes `/usr/local/share/terminfo` (the install prefix), which does not
 exist on end-user machines and causes "Cannot open terminfo database file"
 errors in terminal mode.
-
