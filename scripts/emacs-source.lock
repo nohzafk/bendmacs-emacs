@@ -1,0 +1,5 @@
+# Emacs source lock. Both local builds and CI load this file.
+# This is a development snapshot, not an official GNU release tarball.
+readonly EMACS_SOURCE_REPOSITORY="https://github.com/emacs-mirror/emacs.git"
+readonly EMACS_SOURCE_REVISION="a360712c9d272d950d8d8255ef74570f7e90b7d9"
+readonly EMACS_SOURCE_SERIES="31"

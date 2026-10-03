@@ -1,0 +1,28 @@
+# Ordered UI patch set for the pinned GNU Emacs 31 snapshot.
+#
+# scripts/emacs-patches.sh verifies each SHA-256 below and applies the entries
+# in this exact order -- the same code path is used by the local build
+# (scripts/build.sh) and by CI (.github/workflows/build.yml).  Paths are
+# relative to this file (patches/).  Nothing is downloaded and no wildcard or
+# $WORK cache is consulted: only the entries listed here are applied.
+#
+# Provenance:
+#   emacs-31/{system-appearance,round-undecorated-frame,fix-ns-x-colors,fix-ns-scroll-crash}.patch
+#       d12frosted/homebrew-emacs-plus@6489a284d333119a05c9b0c2175bedf68250d160
+#       (system-appearance rebased to the pinned revision: the two hunks that
+#        need the pinned "Sleep event notification" context are re-anchored;
+#        the added code is unchanged.)
+#   no-frame-refocus-cocoa.patch
+#       Local patch, adapted from the emacs-plus emacs-28 no-frame-refocus
+#       patch and rebased to the pinned delete_frame fallback block.
+#
+# The obsolete emacs-28 fix-window-role patch is intentionally NOT listed: the
+# pinned source already returns NSAccessibilityWindowRole, so applying it would
+# be wrong (it would fail forward and would reverse an upstream fix).
+#
+# <sha256><TAB><path>
+92ee1291c6417f1a735b180f385f0b19fc28c8d0bba63ba4df57449ea9b44759	emacs-31/system-appearance.patch
+c9430a1ead81e313b3d2877ff6f8044fb29441eecc7cc42000515d7c8ec6380f	emacs-31/round-undecorated-frame.patch
+9e5d3e26a8d388d3a000b697d582769645ca93ad597b4113744deba4b89a8b9e	emacs-31/fix-ns-x-colors.patch
+d83afd75ac58f11ac6c12a004474a81511535768544e9cd6e8c2406fed0f05bb	no-frame-refocus-cocoa.patch
+3250bf6e45cdcb3f4cbc0ace2d2d3200464331cbfb34613980554e31ec45fe6c	emacs-31/fix-ns-scroll-crash.patch

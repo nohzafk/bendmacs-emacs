@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Local replica of .github/workflows/build.yml.
 #
-# Builds GNU Emacs 30.2 with the same patches and the same dependency tree
+# Targets the locked GNU Emacs 31 snapshot with the existing patches/deps
 # as CI, but installs everything into a local prefix so it doesn't touch
 # /usr/local or your Homebrew install.
 #
@@ -16,11 +16,14 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO_ROOT/scripts/emacs-source.sh"
+source "$REPO_ROOT/scripts/emacs-patches.sh"
+source "$REPO_ROOT/scripts/emacs-configure.sh"
+source "$REPO_ROOT/scripts/emacs-sign.sh"
 PREFIX="${PREFIX:-$REPO_ROOT/build/prefix}"
 WORK="${WORK:-$REPO_ROOT/build/work}"
-OUT="${OUT:-$REPO_ROOT/build/Emacs.app}"
+OUT="${OUT:-$REPO_ROOT/build/$EMACS_SOURCE_DIR/Emacs.app}"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu)}"
-EMACS_VER="30.2"
 
 mkdir -p "$PREFIX" "$WORK"
 export PATH="$PREFIX/bin:$PATH"
@@ -149,70 +152,42 @@ stage_treesitter() {
   find "$PREFIX/lib" -name 'libtree-sitter*.dylib' -delete
 }
 
-# Emacs: download tarball, apply emacs-plus + local patches, configure, build.
+# Emacs: fetch the locked Git commit; keep its own .git for true provenance.
+# Patch suitability/build readiness for this snapshot is not yet validated.
 stage_emacs() {
-  local src="$WORK/emacs-$EMACS_VER"
-  if [[ -e "$OUT/Contents/MacOS/Emacs" ]]; then skip "Emacs"; return; fi
-  log "Emacs $EMACS_VER"
-  fetch "https://ftpmirror.gnu.org/gnu/emacs/emacs-$EMACS_VER.tar.xz"
-  extract "emacs-$EMACS_VER.tar.xz" "emacs-$EMACS_VER"
+  local src="$WORK/$EMACS_SOURCE_DIR"
+  emacs_check_output "$OUT"
+  emacs_check_patches "$OUT"
+  emacs_check_configuration "$OUT" "$PREFIX"
+  if [[ -e "$src" || -L "$src" ]]; then emacs_validate_source "$src"; fi
+  if [[ -e "$OUT/Contents/MacOS/Emacs" ]]; then
+    emacs_verify_bundle "$OUT"
+    skip "Emacs $EMACS_SOURCE_LABEL"
+    return
+  fi
+  log "Emacs $EMACS_SOURCE_LABEL"
+  emacs_prepare_source "$src"
 
-  # Patch dir: cache patches outside the source tree so re-extraction (e.g.
-  # after `rm -rf emacs-$EMACS_VER`) doesn't re-download them.
-  local patchdir="$WORK/patches"
-  mkdir -p "$patchdir"
-  local patches=(
-    "https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-28/fix-window-role.patch"
-    "https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-30/system-appearance.patch"
-    "https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-30/round-undecorated-frame.patch"
-    "https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-30/fix-ns-x-colors.patch"
-  )
-  for url in "${patches[@]}"; do
-    local f="$patchdir/$(basename "$url")"
-    [[ -s "$f" ]] || curl "${CURL_OPTS[@]}" -o "$f" "$url"
-  done
+  # Patch dir: fixed, vendored set in patches/, selected and applied from
+  # patches/ui-patches.lock.  The exact same code path (SHA-256 verification,
+  # strict -F0, ordered) runs here and in CI: no network download and no
+  # $WORK wildcard cache is involved.
+  emacs_apply_patches "$src"
 
-  # Apply patches idempotently: skip if already applied (rerunnable after
-  # partial failures without `rm -rf` of the source).
   cd "$src"
-  for f in "$patchdir"/*.patch "$REPO_ROOT/patches/no-frame-refocus-cocoa.patch"; do
-    if patch -p1 --dry-run --silent < "$f" >/dev/null 2>&1; then
-      patch -p1 < "$f"
-    elif patch -p1 -R --dry-run --silent < "$f" >/dev/null 2>&1; then
-      log "  already applied: $(basename "$f")"
-    else
-      echo "patch will not apply: $f" >&2
-      exit 1
-    fi
-  done
-
   # Same configure.ac tweak as CI: force libncursesw on darwin.
   sed -i '' '/darwin/ s/lncurses/lncursesw/g' configure.ac
 
   if [[ ! -f configure ]]; then ./autogen.sh; fi
-  ./configure CFLAGS='-O2 -g0 -flto=thin'      \
-              PKG_CONFIG='pkgconf -static'     \
-              --prefix="$PREFIX"               \
-              --disable-gc-mark-trace          \
-              --without-all                    \
-              --with-compress-install          \
-              --with-file-notification=kqueue  \
-              --with-gmp                       \
-              --with-gnutls                    \
-              --with-modules                   \
-              --with-native-image-api          \
-              --with-ns                        \
-              --with-small-ja-dic              \
-              --with-threads                   \
-              --with-toolkit-scroll-bars       \
-              --with-tree-sitter               \
-              --with-webp                      \
-              --with-xml2                      \
-              --with-zlib
+  emacs_configure "$PREFIX"
   make -j"$JOBS"
   make install
   rm -rf "$OUT"
   ditto nextstep/Emacs.app "$OUT"
+  emacs_mark_output "$OUT"
+  emacs_mark_patches "$OUT"
+  emacs_mark_configuration "$OUT" "$PREFIX"
+  emacs_sign_bundle "$OUT"
   log "Built: $OUT"
 }
 

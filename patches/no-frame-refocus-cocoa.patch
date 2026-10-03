@@ -1,34 +1,33 @@
-Subject: [PATCH] no-frame-refocus-cocoa (Emacs 30.x)
+Subject: [PATCH] no-frame-refocus-cocoa (pinned Emacs 31 snapshot)
 
 Adapted from d12frosted/homebrew-emacs-plus emacs-28 no-frame-refocus
-patch. Emacs 30 refactored the post-`delete_frame` NS focus block to
-call `ns_make_frame_key_window` instead of `Fraise_frame`; this patch
-removes the equivalent block under the new code.
+patch. Rebased to a360712c9d272d950d8d8255ef74570f7e90b7d9.
 
-When deleting a frame on macOS, Emacs picks another frame and forces it
-to become the key window. With multiple visible frames (or the daemon)
-that yanks focus to an unrelated frame. Removing the call leaves focus
-to whatever the OS / window manager chooses.
+Emacs 31 first attempts most-recently-used frame selection. Its fallback
+path still calls ns_make_frame_key_window after choosing another visible
+Cocoa frame. Remove only that forced key-window block; preserve MRU
+selection and do_switch_frame. This retains the old patch's narrow intent,
+not a guarantee about every macOS focus path.
 
+diff --git a/src/frame.c b/src/frame.c
 --- a/src/frame.c
 +++ b/src/frame.c
-@@ -2212,19 +2212,6 @@
+@@ -2809,18 +2809,6 @@
+ 		      frame1 = Qnil;
+ 		    }
  		}
- 	    }
- 	}
 -#ifdef NS_IMPL_COCOA
--      else
--	{
--	  /* Under NS, there is no system mechanism for choosing a new
--	     window to get focus -- it is left to application code.
--	     So the portion of THIS application interfacing with NS
--	     needs to make the frame we switch to the key window.  */
--	  struct frame *f1 = XFRAME (frame1);
--	  if (FRAME_NS_P (f1))
--	    ns_make_frame_key_window (f1);
--	}
+-	      else
+-		{
+-		  /* Under NS, there is no system mechanism for choosing a new
+-		     window to get focus -- it is left to application code.
+-		     So the portion of THIS application interfacing with NS
+-		     needs to make the frame we switch to the key window.  */
+-		  struct frame *f1 = XFRAME (frame1);
+-		  if (FRAME_NS_P (f1))
+-		    ns_make_frame_key_window (f1);
+-		}
 -#endif
--
-       do_switch_frame (frame1, 0, 1, Qnil);
-       sf = SELECTED_FRAME ();
-     }
+ 	    }
+ 
+ 	  if (FRAMEP (frame1) && XFRAME (frame1) != f)

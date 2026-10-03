@@ -1,0 +1,4 @@
+# Unified diffs and patch files contain context lines whose leading space +
+# tab/indent and whose blank context line (" ") legitimately trip git's
+# whitespace checks.  Do not flag them in `git diff --check`.
+*.patch -whitespace

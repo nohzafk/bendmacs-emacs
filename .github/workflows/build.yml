@@ -24,6 +24,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Load Emacs source lock
+        run: |
+          source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
+          printf '%s\n' "EMACS_SOURCE_LABEL=$EMACS_SOURCE_LABEL" \
+            "EMACS_SOURCE_DIR=$EMACS_SOURCE_DIR" "EMACS_ARTIFACT=$EMACS_ARTIFACT" \
+            "EMACS_RELEASE_TAG=$EMACS_RELEASE_TAG" >> "$GITHUB_ENV"
       - name: Uninstall Homebrew
         run: |
           curl $CURL_OPTS -O https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh
@@ -153,51 +159,34 @@ jobs:
           sudo make install
       - name: Build Emacs
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/emacs/emacs-30.2.tar.xz
-          tar -Jxf emacs-30.2.tar.xz && cd emacs-30.2
-          # Apply emacs-plus patches
-          curl $CURL_OPTS -O https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-28/fix-window-role.patch
-          curl $CURL_OPTS -O https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-30/system-appearance.patch
-          curl $CURL_OPTS -O https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-30/round-undecorated-frame.patch
-          curl $CURL_OPTS -O https://raw.githubusercontent.com/d12frosted/homebrew-emacs-plus/master/patches/emacs-30/fix-ns-x-colors.patch
-          patch -p1 < fix-window-role.patch
-          patch -p1 < system-appearance.patch
-          patch -p1 < round-undecorated-frame.patch
-          patch -p1 < fix-ns-x-colors.patch
-          # Local patch: drop NS focus-stealing on frame deletion (no upstream
-          # emacs-30 equivalent; emacs-plus only ships this for emacs-28/29).
-          patch -p1 < ../patches/no-frame-refocus-cocoa.patch
+          source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-configure.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-sign.sh"
+          emacs_prepare_source "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
+          cd "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
+          # Fixed, vendored emacs-plus/local UI patch set.  Same ordered,
+          # SHA-256-verified, strict -F0 application as scripts/build.sh; no
+          # patch is downloaded and no wildcard/app cache is consulted.
+          emacs_apply_patches "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
           sed -i '' '/darwin/ s/lncurses/lncursesw/g' configure.ac
-          ./autogen.sh && ./configure CFLAGS='-O2 -g0 -flto=thin'     \
-                                      PKG_CONFIG='pkgconf -static'    \
-                                      --disable-gc-mark-trace         \
-                                      --without-all                   \
-                                      --with-compress-install         \
-                                      --with-file-notification=kqueue \
-                                      --with-gmp                      \
-                                      --with-gnutls                   \
-                                      --with-modules                  \
-                                      --with-native-image-api         \
-                                      --with-ns                       \
-                                      --with-small-ja-dic             \
-                                      --with-threads                  \
-                                      --with-toolkit-scroll-bars      \
-                                      --with-tree-sitter              \
-                                      --with-webp                     \
-                                      --with-xml2                     \
-                                      --with-zlib
+          ./autogen.sh && emacs_configure
           make -j4
           make install
           ditto nextstep/Emacs.app Emacs.app
-          tar -Jcf Emacs-30.2.tar.xz Emacs.app
+          emacs_mark_output Emacs.app
+          emacs_mark_patches Emacs.app
+          emacs_mark_configuration Emacs.app
+          emacs_sign_bundle Emacs.app
+          tar -Jcf "$EMACS_ARTIFACT" Emacs.app
       - name: Update release tag
         run: |
-          git tag -f v30.2
-          git push origin v30.2 --force
+          git tag -f "$EMACS_RELEASE_TAG"
+          git push origin "$EMACS_RELEASE_TAG" --force
       - name: Release Emacs
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v30.2
-          name: Emacs 30.2
-          files: emacs-30.2/Emacs-30.2.tar.xz
+          tag_name: ${{ env.EMACS_RELEASE_TAG }}
+          name: Emacs ${{ env.EMACS_SOURCE_LABEL }}
+          files: ${{ env.EMACS_SOURCE_DIR }}/${{ env.EMACS_ARTIFACT }}
           make_latest: true
