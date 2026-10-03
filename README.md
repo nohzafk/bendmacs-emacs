@@ -1,6 +1,6 @@
 [![MacOS Build for GNU Emacs](https://github.com/nohzafk/ebuild/actions/workflows/build.yml/badge.svg)](https://github.com/nohzafk/ebuild/actions/workflows/build.yml)
 
-This repository targets a pinned GNU Emacs 31 development snapshot for macOS
+This repository targets the pinned GNU Emacs 31.1 release source for macOS
 with static linking and emacs-plus patches. Based on the work of upstream [ebuild](https://github.com/RadioNoiseE/ebuild)
 
 Builds are triggered manually via workflow dispatch.
@@ -11,22 +11,28 @@ Builds are triggered manually via workflow dispatch.
 
 - Repository: `https://github.com/emacs-mirror/emacs.git`
 - Commit: `a360712c9d272d950d8d8255ef74570f7e90b7d9`
+- Release: `emacs-31.1` (the upstream annotated tag points at this commit)
 - Label: `31-snapshot-a360712c9d272d950d8d8255ef74570f7e90b7d9`
 
 The shared helper fetches only this full commit SHA into a detached Git checkout.
-It does not follow `master`, an Emacs 31 branch, or a release tag. Each checkout
-has its own `.git`, so Emacs build metadata comes from Emacs, not this ebuild
-repository. This source is not an official GNU 31.1 release tarball.
+It does not follow `master`, an Emacs 31 branch, or the release tag itself: the
+SHA is pinned so a moved or deleted upstream tag cannot change what is built.
+Each checkout has its own `.git`, so Emacs build metadata comes from Emacs, not
+this ebuild repository. The commit is the Emacs 31.1 release commit, though it
+is fetched from Git rather than from the GNU release tarball.
 
 The UI patches have been migrated to this exact revision and are vendored in
 `patches/` with a fixed order and provenance in `patches/ui-patches.lock`
 (`scripts/emacs-patches.sh` verifies each SHA-256 and applies them with
 `patch -F0`). Both build paths now use `scripts/emacs-configure.sh` to request
 Cocoa xwidgets and explicitly disable native Elisp compilation. All other
-configure options and dependency versions are unchanged. Neither configure
-nor a full Emacs build has been run, so detected features, linking, and
-compile/GUI behaviour remain unverified. The feature list below describes
-requested capabilities, not a verified Emacs 31 binary.
+configure options and dependency versions are unchanged apart from dropping
+the now-unrecognised `--with-gmp`. Configure detects XWIDGETS, MODULES,
+TREE_SITTER, WEBP, native image APIs, GNUTLS, LIBXML2, GMP and ZLIB, and
+reports no native Lisp compiler. A full Emacs build from this revision has
+also been produced, signed, and started with a real configuration, but the
+feature list below describes requested capabilities rather than a per-package
+functional guarantee.
 
 Source and default output directories include the full SHA. Existing source
 caches must have their own `.git`, the locked HEAD, and the expected origin.
@@ -50,9 +56,11 @@ GUI behaviour.
 Old `emacs-30.2` and `build/Emacs.app` caches are left untouched and are not used
 by default.
 
-CI artifact and release tag names use the same snapshot label:
-`Emacs-31-snapshot-<full-SHA>.tar.xz` and `v31-snapshot-<full-SHA>`.
-The app bundle remains `Emacs.app`.
+CI publishes the artifact under the snapshot label but tags and titles the
+release after the Emacs release it contains: asset
+`Emacs-31-snapshot-<full-SHA>.tar.xz`, release tag `emacs-31.1`, release title
+`Emacs 31.1`. The directory, artifact and provenance label stay keyed to the
+exact revision because they are cache keys. The app bundle remains `Emacs.app`.
 
 Run the focused offline checks (no downloads or build stages):
 

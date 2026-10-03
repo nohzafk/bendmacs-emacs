@@ -29,7 +29,8 @@ jobs:
           source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
           printf '%s\n' "EMACS_SOURCE_LABEL=$EMACS_SOURCE_LABEL" \
             "EMACS_SOURCE_DIR=$EMACS_SOURCE_DIR" "EMACS_ARTIFACT=$EMACS_ARTIFACT" \
-            "EMACS_RELEASE_TAG=$EMACS_RELEASE_TAG" >> "$GITHUB_ENV"
+            "EMACS_RELEASE_TAG=$EMACS_RELEASE_TAG" \
+            "EMACS_RELEASE_NAME=$EMACS_RELEASE_NAME" >> "$GITHUB_ENV"
       - name: Uninstall Homebrew
         run: |
           curl $CURL_OPTS -O https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh
@@ -187,6 +188,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.EMACS_RELEASE_TAG }}
-          name: Emacs ${{ env.EMACS_SOURCE_LABEL }}
+          name: ${{ env.EMACS_RELEASE_NAME }}
           files: ${{ env.EMACS_SOURCE_DIR }}/${{ env.EMACS_ARTIFACT }}
           make_latest: true

@@ -1,5 +1,10 @@
 # Emacs source lock. Both local builds and CI load this file.
-# This is a development snapshot, not an official GNU release tarball.
+# REVISION is the commit that the upstream annotated tag
+# EMACS_SOURCE_RELEASE_TAG points at, so this is the Emacs 31.1 release
+# source rather than a mid-development snapshot. It is pinned by full SHA
+# so that a moved or deleted upstream tag cannot change what we build.
 readonly EMACS_SOURCE_REPOSITORY="https://github.com/emacs-mirror/emacs.git"
 readonly EMACS_SOURCE_REVISION="a360712c9d272d950d8d8255ef74570f7e90b7d9"
 readonly EMACS_SOURCE_SERIES="31"
+readonly EMACS_SOURCE_RELEASE_TAG="emacs-31.1"
+readonly EMACS_SOURCE_RELEASE_NAME="Emacs 31.1"

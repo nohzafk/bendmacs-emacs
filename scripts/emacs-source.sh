@@ -6,10 +6,14 @@ if [[ ! "$EMACS_SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Emacs source lock must contain a full 40-character SHA" >&2
   exit 1
 fi
+# Directory, artifact and provenance label stay keyed to the exact revision:
+# they are cache keys, and changing them would invalidate existing outputs.
 readonly EMACS_SOURCE_LABEL="${EMACS_SOURCE_SERIES}-snapshot-${EMACS_SOURCE_REVISION}"
 readonly EMACS_SOURCE_DIR="emacs-${EMACS_SOURCE_LABEL}"
 readonly EMACS_ARTIFACT="Emacs-${EMACS_SOURCE_LABEL}.tar.xz"
-readonly EMACS_RELEASE_TAG="v${EMACS_SOURCE_LABEL}"
+# The published release is named after the upstream release it contains.
+readonly EMACS_RELEASE_TAG="$EMACS_SOURCE_RELEASE_TAG"
+readonly EMACS_RELEASE_NAME="$EMACS_SOURCE_RELEASE_NAME"
 
 emacs_source_error() {
   echo "Emacs source/cache mismatch: $*; use a fresh path (nothing was deleted)." >&2

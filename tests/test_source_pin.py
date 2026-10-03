@@ -24,6 +24,18 @@ def run_block(name):
 
 
 class SourcePinTests(unittest.TestCase):
+    def test_lock_names_the_upstream_release(self):
+        lock = (ROOT / "scripts/emacs-source.lock").read_text()
+        self.assertIn('readonly EMACS_SOURCE_RELEASE_TAG="emacs-31.1"', lock)
+        self.assertIn(f'readonly EMACS_SOURCE_REVISION="{PIN}"', lock)
+        self.assertNotIn("This is a development snapshot", lock)
+        self.assertNotIn("not an official", lock)
+        self.assertIn("release", lock)
+
+    def test_release_name_reaches_the_release_step(self):
+        self.assertIn('name: ${{ env.EMACS_RELEASE_NAME }}', CI)
+        self.assertIn('"EMACS_RELEASE_NAME=$EMACS_RELEASE_NAME"', run_block("Load Emacs source lock"))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -101,7 +113,8 @@ esac
             "EMACS_SOURCE_LABEL": f"31-snapshot-{PIN}",
             "EMACS_SOURCE_DIR": f"emacs-31-snapshot-{PIN}",
             "EMACS_ARTIFACT": f"Emacs-31-snapshot-{PIN}.tar.xz",
-            "EMACS_RELEASE_TAG": f"v31-snapshot-{PIN}"})
+            "EMACS_RELEASE_TAG": "emacs-31.1",
+            "EMACS_RELEASE_NAME": "Emacs 31.1"})
         self.assertIn('emacs_prepare_source "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"', run_block("Build Emacs"))
         self.assertNotIn("30.2", CI)
         self.assertNotIn("30.2", LOCAL)
