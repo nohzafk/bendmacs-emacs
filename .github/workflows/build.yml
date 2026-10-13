@@ -1,14 +1,56 @@
 name: MacOS Build for GNU Emacs
 
+# Every push and pull request runs the tests. A release is built only when
+# dispatched by hand, and only after the tests pass on the same commit.
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  tests:
     runs-on: macos-15
+    defaults:
+      run:
+        shell: bash -euxo pipefail {0}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Offline tests
+        run: |
+          # BASH_ENV would be sourced by every bash the tests start.
+          for t in tests/test_*.py; do
+            env -u BASH_ENV python3 "$t"
+          done
+      - name: Fetch the pinned source
+        run: |
+          source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
+          emacs_prepare_source "$RUNNER_TEMP/$EMACS_SOURCE_DIR"
+          # The files the patches touch, from the pinned commit itself.
+          mkdir "$RUNNER_TEMP/ui-targets"
+          git -C "$RUNNER_TEMP/$EMACS_SOURCE_DIR" archive HEAD src lisp/term \
+            | tar -x -C "$RUNNER_TEMP/ui-targets"
+      - name: Apply the patch set to the pinned source
+        run: |
+          # The integration tests skip unless this directory exists; check it
+          # so a missing tree fails here instead of passing as a skip.
+          test -f "$RUNNER_TEMP/ui-targets/src/nsterm.m"
+          EBUILD_UI_TARGETS="$RUNNER_TEMP/ui-targets" env -u BASH_ENV \
+            python3 tests/test_ui_patches.py
+  build:
+    needs: tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    permissions:
+      contents: write
+    # Two dispatches of one build number would both pass the tag check below;
+    # running them one at a time makes the second one refuse.
+    concurrency:
+      group: release
+      cancel-in-progress: false
     defaults:
       run:
         # Fail fast: -e halts on any error, -u catches unset vars,
@@ -31,6 +73,10 @@ jobs:
             "EMACS_SOURCE_DIR=$EMACS_SOURCE_DIR" "EMACS_ARTIFACT=$EMACS_ARTIFACT" \
             "EMACS_RELEASE_TAG=$EMACS_RELEASE_TAG" \
             "EMACS_RELEASE_NAME=$EMACS_RELEASE_NAME" >> "$GITHUB_ENV"
+      - name: Refuse an existing release tag
+        run: |
+          source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
+          emacs_check_release_tag_free "$GITHUB_WORKSPACE"
       - name: Uninstall Homebrew
         run: |
           curl $CURL_OPTS -O https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh
@@ -180,14 +226,44 @@ jobs:
           emacs_mark_configuration Emacs.app
           emacs_sign_bundle Emacs.app
           tar -Jcf "$EMACS_ARTIFACT" Emacs.app
-      - name: Update release tag
+          shasum -a 256 "$EMACS_ARTIFACT" > "$EMACS_ARTIFACT.sha256"
+      - name: Write release notes
         run: |
-          git tag -f "$EMACS_RELEASE_TAG"
-          git push origin "$EMACS_RELEASE_TAG" --force
+          source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"
+          cd "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
+          # The notes describe the bundle being published: its markers must
+          # be the ones this commit's locks produce.
+          resources=Emacs.app/Contents/Resources
+          test "$(cat "$resources/ebuild-source.txt")" = "$(emacs_source_metadata)"
+          test "$(cat "$resources/ebuild-patches.txt")" = "$(emacs_patches_metadata)"
+          {
+            printf '%s for macOS on Apple silicon: build %s of bendmacs-emacs.\n\n' \
+              "$EMACS_SOURCE_RELEASE_NAME" "$EMACS_BUILD_NUMBER"
+            printf -- '- Source: %s at `%s`, the commit the upstream tag `%s` points at.\n' \
+              "$EMACS_SOURCE_REPOSITORY" "$EMACS_SOURCE_REVISION" "$EMACS_SOURCE_RELEASE_TAG"
+            printf -- '- Patch set: `patchset=%s`, as recorded in `Contents/Resources/ebuild-patches.txt` inside the bundle. Applied in this order:\n' \
+              "$(emacs_patches_digest)"
+            emacs_patch_entries | while IFS=$'\t' read -r _ path; do
+              printf '  - `%s`\n' "$path"
+            done
+            printf -- '- Verify the download: `shasum -a 256 -c %s.sha256`.\n' "$EMACS_ARTIFACT"
+          } > release-notes.md
+          cat release-notes.md
+      - name: Recheck the release tag
+        run: |
+          source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
+          emacs_check_release_tag_free "$GITHUB_WORKSPACE"
       - name: Release Emacs
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.EMACS_RELEASE_TAG }}
+          # The action creates the tag at the commit that was built.
+          target_commitish: ${{ github.sha }}
           name: ${{ env.EMACS_RELEASE_NAME }}
-          files: ${{ env.EMACS_SOURCE_DIR }}/${{ env.EMACS_ARTIFACT }}
+          body_path: ${{ env.EMACS_SOURCE_DIR }}/release-notes.md
+          files: |
+            ${{ env.EMACS_SOURCE_DIR }}/${{ env.EMACS_ARTIFACT }}
+            ${{ env.EMACS_SOURCE_DIR }}/${{ env.EMACS_ARTIFACT }}.sha256
+          fail_on_unmatched_files: true
           make_latest: true

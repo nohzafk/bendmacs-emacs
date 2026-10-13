@@ -1,12 +1,12 @@
 # The xwidget patches: why, and how
 
-This repository ships the emacs-plus UI patches and, on top of them, a
-small set of local patches to Emacs's xwidget support on macOS. This
-document is the reasoning behind the local ones: what we wanted, what in
-Emacs stood in the way, what each patch changes and why it changes it that
-way. The README's *Patches Applied* lists what is applied; this file says
-why. The mechanics of applying patches (the lock file, SHA-256, `-F0`) are
-in the README and `scripts/emacs-patches.sh`.
+This repository, bendmacs-emacs, ships the emacs-plus UI patches and, on
+top of them, a small set of local patches to Emacs's xwidget support on
+macOS. This document is the reasoning behind the local ones: what we
+wanted, what in Emacs stood in the way, what each patch changes and why it
+changes it that way. The README's *The patch set* lists what is applied;
+this file says why. The mechanics of applying patches (the lock file,
+SHA-256, `-F0`) are in the README and `scripts/emacs-patches.sh`.
 
 ## What we wanted
 
