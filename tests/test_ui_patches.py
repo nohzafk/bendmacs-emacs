@@ -35,6 +35,7 @@ ORDER = [
     "emacs-31/fix-ns-x-colors.patch",
     "no-frame-refocus-cocoa.patch",
     "emacs-31/fix-ns-scroll-crash.patch",
+    "emacs-31/native-xwidget.patch",
 ]
 
 # SHA-256 of the audited/derived patch bytes.
@@ -131,6 +132,19 @@ class PatchLockTests(unittest.TestCase):
         scr = body["emacs-31/fix-ns-scroll-crash.patch"]
         self.assertIn("bug#81585", scr)
         self.assertIn("if (dest.y < 0)", scr)
+        nat = body["emacs-31/native-xwidget.patch"]
+        self.assertIn('DEFSYM (Qnative, "native")', nat)
+        self.assertIn("XUSER_PTR (arguments)->p", nat)
+        self.assertIn("xv->xvWindow.hidden = YES", nat)
+        self.assertIn("xv->xvWindow.clipsToBounds = YES", nat)
+        # The type is NS-only: its acceptance sits inside NS_IMPL_COCOA, and
+        # the WebKit hide (moving the container away) is kept.
+        self.assertIn("+#ifdef NS_IMPL_COCOA\n+  void *native_view = NULL;", nat)
+        self.assertIn("setFrameOrigin:NSMakePoint(10000, 10000)", nat)
+        touched = {l[len("+++ b/"):] for l in nat.splitlines()
+                   if l.startswith("+++ b/")}
+        self.assertEqual(touched, {"src/xwidget.c", "src/nsxwidget.m",
+                                   "src/nsxwidget.h"})
 
 
 class HelperTests(unittest.TestCase):
@@ -363,6 +377,8 @@ class RealTargetIntegrationTests(unittest.TestCase):
         self.assertNotIn("ns_make_frame_key_window", fc)
         self.assertIn("do_switch_frame (frame1, 0, 1, Qnil)", fc)
         self.assertIn("if (dest.y < 0)", ns)
+        self.assertIn('DEFSYM (Qnative, "native")',
+                      (self.tree / "src/xwidget.c").read_text())
         # Upstream accessibility role is left untouched.
         self.assertIn("return NSAccessibilityWindowRole;", ns)
         self.assertNotIn("NSAccessibilityTextFieldRole", ns)

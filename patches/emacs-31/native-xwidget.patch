@@ -1,0 +1,205 @@
+native-xwidget: a `native' xwidget type whose view a dynamic module supplies.
+
+NS (Cocoa) only.  `make-xwidget' accepts TYPE `native'; ARGUMENTS is then
+a user pointer, made by a dynamic module, whose pointer is an NSView the
+module created and holds a reference to.  Emacs retains the view for the
+widget's life, puts it in the widget's container (xwWindow) as it does a
+WKWebView, and releases it in nsxwidget_kill.  Redisplay moves, resizes,
+clips and hides the view through the same code as a WebKit view, with one
+difference: a native view's per-window container is hidden with its
+`hidden' property instead of being moved to (10000, 10000), so AppKit
+sends the module's view `viewDidHide' and `viewDidUnhide' and the module
+can stop drawing while it is out of sight.  WebKit views keep the move.
+
+The per-window container (XvWindow) now clips to its bounds, for both
+types.  Redisplay clips a widget by sizing that container, but AppKit
+stopped clipping subviews by default for programs linked against macOS 14
+or later, so a widget cut by a window edge drew past it.
+
+The xwidget-webkit-* functions already check the type and signal
+"Not a WebKit widget" for a native widget.  nsxwidget_kill skips the
+WebKit teardown for it, and returns early for an xwidget that was already
+killed: on NS `kill-xwidget' leaves the buffer set, so a second call
+reached nsxwidget_kill again and released the container twice (found by
+reading the source).  GTK and PGTK are unchanged: there `native' is still
+a bad xwidget type.
+
+diff --git a/src/nsxwidget.h b/src/nsxwidget.h
+index f6dd12c..3688932 100644
+--- a/src/nsxwidget.h
++++ b/src/nsxwidget.h
+@@ -50,7 +50,7 @@ #define NSXWIDGET_H_INCLUDED
+ @end
+ #endif
+ 
+-void nsxwidget_init (struct xwidget *xw);
++void nsxwidget_init (struct xwidget *xw, void *native_view);
+ void nsxwidget_kill (struct xwidget *xw);
+ void nsxwidget_resize (struct xwidget *xw);
+ Lisp_Object nsxwidget_get_size (struct xwidget *xw);
+diff --git a/src/nsxwidget.m b/src/nsxwidget.m
+index dd9ec28..aac057a 100644
+--- a/src/nsxwidget.m
++++ b/src/nsxwidget.m
+@@ -484,18 +484,27 @@ @implementation XwWindow
+ - (BOOL) isFlipped { return YES; }
+ @end
+ 
+-/* Xwidget model, macOS Cocoa part.  */
++/* Xwidget model, macOS Cocoa part.  NATIVE_VIEW is NULL for a WebKit
++   widget.  For a native widget it is the NSView a dynamic module
++   made; the module keeps its own reference, and this one is released
++   in 'nsxwidget_kill'.  */
+ 
+ void
+-nsxwidget_init (struct xwidget *xw)
++nsxwidget_init (struct xwidget *xw, void *native_view)
+ {
+   block_input ();
+   NSRect rect = NSMakeRect (0, 0, xw->width, xw->height);
+-  xw->xwWidget = [[XwWebView alloc]
+-                   initWithFrame:rect
+-                   configuration:[[[WKWebViewConfiguration alloc] init]
+-                                   autorelease]
+-                         xwidget:xw];
++  if (native_view)
++    {
++      xw->xwWidget = [(NSView *) native_view retain];
++      [xw->xwWidget setFrame:rect];
++    }
++  else
++    xw->xwWidget = [[XwWebView alloc]
++                     initWithFrame:rect
++                     configuration:[[[WKWebViewConfiguration alloc] init]
++                                     autorelease]
++                           xwidget:xw];
+   xw->xwWindow = [[XwWindow alloc]
+                    initWithFrame:rect];
+   [xw->xwWindow addSubview:xw->xwWidget];
+@@ -506,10 +515,11 @@ - (BOOL) isFlipped { return YES; }
+ void
+ nsxwidget_kill (struct xwidget *xw)
+ {
+-  if (xw)
++  if (xw && xw->xwWidget)
+     {
+-      WKUserContentController *scriptor =
+-        ((XwWebView *) xw->xwWidget).configuration.userContentController;
++      bool web = nsxwidget_is_web_view (xw);
++      WKUserContentController *scriptor = web ?
++        ((XwWebView *) xw->xwWidget).configuration.userContentController : nil;
+       [scriptor removeAllUserScripts];
+       [scriptor removeScriptMessageHandlerForName:@"keyDown"];
+ 
+@@ -519,9 +529,11 @@ - (BOOL) isFlipped { return YES; }
+       /* This stops playing audio when a xwidget-webkit buffer is
+          killed.  I could not find other solution.
+          TODO: improve this */
+-      nsxwidget_webkit_goto_uri (xw, "about:blank");
+-
+-      [((XwWebView *) xw->xwWidget).urlScriptBlocked release];
++      if (web)
++        {
++          nsxwidget_webkit_goto_uri (xw, "about:blank");
++          [((XwWebView *) xw->xwWidget).urlScriptBlocked release];
++        }
+       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
+ 
+       [xw->xwWidget release];
+@@ -572,6 +584,13 @@ - (BOOL) isFlipped { return YES; }
+ 
+   xv->xvWindow = [[XvWindow alloc]
+                    initWithFrame:NSMakeRect (x, y, xw->width, xw->height)];
++#if MAC_OS_X_VERSION_MAX_ALLOWED >= 140000
++  /* Redisplay clips the widget by sizing this container, and AppKit
++     does not clip a view's subviews to its bounds by default for
++     programs linked against macOS 14 or later.  */
++  if ([xv->xvWindow respondsToSelector:@selector (setClipsToBounds:)])
++    xv->xvWindow.clipsToBounds = YES;
++#endif
+   xv->xvWindow.xw = xw;
+   xv->xvWindow.xv = xv;
+ 
+@@ -595,10 +614,21 @@ - (BOOL) isFlipped { return YES; }
+   [xv->xvWindow release];
+ }
+ 
++/* A native view is hidden with the 'hidden' property, so that AppKit
++   tells it through 'viewDidHide' and 'viewDidUnhide'.  A WebKit view is
++   moved out of sight instead, which WebKit is known to cope with.  */
++static bool
++nsxwidget_native_view_p (struct xwidget_view *xv)
++{
++  return XWIDGETP (xv->model) && EQ (XXWIDGET (xv->model)->type, Qnative);
++}
++
+ void
+ nsxwidget_show_view (struct xwidget_view *xv)
+ {
+   xv->hidden = NO;
++  if (xv->xvWindow.hidden)
++    xv->xvWindow.hidden = NO;
+   [xv->xvWindow setFrameOrigin:NSMakePoint(xv->x + xv->clip_left,
+                                            xv->y + xv->clip_top)];
+ }
+@@ -607,7 +637,10 @@ - (BOOL) isFlipped { return YES; }
+ nsxwidget_hide_view (struct xwidget_view *xv)
+ {
+   xv->hidden = YES;
+-  [xv->xvWindow setFrameOrigin:NSMakePoint(10000, 10000)];
++  if (nsxwidget_native_view_p (xv))
++    xv->xvWindow.hidden = YES;
++  else
++    [xv->xvWindow setFrameOrigin:NSMakePoint(10000, 10000)];
+ }
+ 
+ void
+diff --git a/src/xwidget.c b/src/xwidget.c
+index e2ab749..18e687c 100644
+--- a/src/xwidget.c
++++ b/src/xwidget.c
+@@ -286,6 +286,10 @@ DEFUN ("make-xwidget",
+ TYPE is a symbol which can take one of the following values:
+ 
+ - webkit
++- native (macOS Cocoa only): ARGUMENTS is a user pointer, made by a
++  dynamic module, whose pointer is an NSView the module created.  The
++  xwidget retains the view until it is killed and places, clips and
++  hides it as it does a WebKit view.
+ 
+ RELATED is nil, or an xwidget.  When constructing a WebKit widget, it
+ will share the same settings and internal subprocess as RELATED.
+@@ -303,6 +307,16 @@ DEFUN ("make-xwidget",
+   CHECK_FIXNAT (width);
+   CHECK_FIXNAT (height);
+ 
++#ifdef NS_IMPL_COCOA
++  void *native_view = NULL;
++  if (EQ (type, Qnative))
++    {
++      if (!USER_PTRP (arguments) || !XUSER_PTR (arguments)->p)
++	error ("A native xwidget needs a user pointer to an NSView");
++      native_view = XUSER_PTR (arguments)->p;
++    }
++  else
++#endif
+   if (!EQ (type, Qwebkit))
+     error ("Bad xwidget type");
+ 
+@@ -474,7 +488,7 @@ DEFUN ("make-xwidget",
+       unblock_input ();
+     }
+ #elif defined NS_IMPL_COCOA
+-  nsxwidget_init (xw);
++  nsxwidget_init (xw, native_view);
+ #endif
+ 
+   return val;
+@@ -3951,6 +3965,7 @@ syms_of_xwidget (void)
+   defsubr (&Sxwidget_webkit_zoom);
+   defsubr (&Sxwidget_webkit_execute_script);
+   DEFSYM (Qwebkit, "webkit");
++  DEFSYM (Qnative, "native");
+ 
+   defsubr (&Sxwidget_size_request);
+   defsubr (&Sdelete_xwidget_view);

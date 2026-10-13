@@ -108,6 +108,16 @@ and in CI. Provenance is the emacs-plus commit
   Cocoa key window onto another Emacs frame. Rebased to this revision: only the
   forced `ns_make_frame_key_window` fallback block is removed; the most-recently
   used frame selection and `do_switch_frame` are kept.
+- **native-xwidget** (local) - Adds a `native` xwidget type on macOS (NS only):
+  `make-xwidget` takes, as ARGUMENTS, a user pointer to an `NSView` that a
+  dynamic module created, and redisplay places, clips and hides that view as it
+  does a WebKit one. A hidden native view's container gets the `hidden`
+  property, so the view receives `viewDidHide`/`viewDidUnhide`; a WebKit view is
+  still moved off-screen. The per-window container now clips to its bounds for
+  both types: AppKit stopped clipping subviews by default for programs linked
+  against macOS 14 or later, so a widget cut by a window edge drew past it. The
+  `xwidget-webkit-*` functions signal an error for a native widget. GTK and
+  PGTK builds are unchanged.
 
 The obsolete emacs-28 **fix-window-role** patch is no longer applied: this
 revision already returns `NSAccessibilityWindowRole`, so the patch would fail

@@ -15,6 +15,11 @@
 #   no-frame-refocus-cocoa.patch
 #       Local patch, adapted from the emacs-plus emacs-28 no-frame-refocus
 #       patch and rebased to the pinned delete_frame fallback block.
+#   emacs-31/native-xwidget.patch
+#       Local patch, written against the pinned revision: a `native' xwidget
+#       type (NS only) whose NSView a dynamic module supplies.  Touches only
+#       src/xwidget.c, src/nsxwidget.m and src/nsxwidget.h, which no other
+#       patch here touches.
 #
 # The obsolete emacs-28 fix-window-role patch is intentionally NOT listed: the
 # pinned source already returns NSAccessibilityWindowRole, so applying it would
@@ -26,3 +31,4 @@ c9430a1ead81e313b3d2877ff6f8044fb29441eecc7cc42000515d7c8ec6380f	emacs-31/round-
 9e5d3e26a8d388d3a000b697d582769645ca93ad597b4113744deba4b89a8b9e	emacs-31/fix-ns-x-colors.patch
 d83afd75ac58f11ac6c12a004474a81511535768544e9cd6e8c2406fed0f05bb	no-frame-refocus-cocoa.patch
 3250bf6e45cdcb3f4cbc0ace2d2d3200464331cbfb34613980554e31ec45fe6c	emacs-31/fix-ns-scroll-crash.patch
+e71e0ab429384a4b580378698c44c43284c212f3036f2eed2059b81bc3a9a561	emacs-31/native-xwidget.patch
