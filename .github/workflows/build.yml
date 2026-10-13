@@ -170,7 +170,7 @@ jobs:
           # SHA-256-verified, strict -F0 application as scripts/build.sh; no
           # patch is downloaded and no wildcard/app cache is consulted.
           emacs_apply_patches "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
-          sed -i '' '/darwin/ s/lncurses/lncursesw/g' configure.ac
+          sed -i '' '/darwin/ s/-lncurses"/-lncursesw"/' configure.ac
           ./autogen.sh && emacs_configure
           make -j4
           make install

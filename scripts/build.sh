@@ -175,8 +175,10 @@ stage_emacs() {
   emacs_apply_patches "$src"
 
   cd "$src"
-  # Same configure.ac tweak as CI: force libncursesw on darwin.
-  sed -i '' '/darwin/ s/lncurses/lncursesw/g' configure.ac
+  # Same configure.ac tweak as CI: force libncursesw on darwin.  The match
+  # includes the closing quote so a rerun on an already-tweaked checkout
+  # finds nothing to change, instead of writing -lncursesww.
+  sed -i '' '/darwin/ s/-lncurses"/-lncursesw"/' configure.ac
 
   if [[ ! -f configure ]]; then ./autogen.sh; fi
   emacs_configure "$PREFIX"

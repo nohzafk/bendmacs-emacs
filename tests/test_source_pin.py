@@ -41,6 +41,9 @@ class SourcePinTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.work = Path(self.tmp.name)
         self.env = dict(os.environ)
+        # A BASH_ENV file (the user's shell environment) is sourced by every
+        # bash below and can put a real git ahead of the fake one on PATH.
+        self.env.pop("BASH_ENV", None)
         self.env.update(HELPER=str(HELPER), ROOT=str(ROOT),
                         TRACE=str(self.work / "trace"),
                         FAKE_HEAD=PIN, FAKE_ORIGIN=ORIGIN)
