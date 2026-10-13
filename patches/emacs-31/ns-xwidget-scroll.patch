@@ -1,0 +1,90 @@
+ns-xwidget-scroll: move xwidget views when ns_scroll_run copies rows.
+
+NS (Cocoa) only.  When redisplay scrolls a window by copying rows
+(scroll_run_hook) instead of drawing them again, a copied row's glyphs
+are not drawn, so x_draw_xwidget_glyph_string does not run for an xwidget
+in it and the view stays where it was last drawn.  On NS that left every
+xwidget view behind by the height of each line scrolled: under one-line
+scroll-up-command, wheel and pixel-precision scrolling, and a page scroll
+that keeps the widget on screen, for WebKit and native views alike.
+force-window-update did not move the view; redraw-frame did.
+
+x_scroll_run has a HAVE_XWIDGETS branch for this case and ns_scroll_run
+had none.  This ports it: each XvWindow subview of the frame's EmacsView
+whose widget lies in the run's rows is moved by the run's displacement
+and reclipped to its text area with the formula of
+x_draw_xwidget_glyph_string, so a later draw of the same glyph finds
+nothing to move.  It differs from the X branch in two ways:
+
+- A view is in the run when the widget's whole rectangle overlaps the
+  run's rows, where X tests the view's visible part against the band
+  actually copied.  A widget lies inside its glyph row, so both select
+  the rows' widgets, but the X test misses a widget clipped to nothing
+  before the scroll and one in rows the copy leaves out because they lie
+  outside the text area (a partly visible row under pixel scrolling);
+  those move with their rows all the same.
+- A view clipped to nothing is sized to zero height, as the NS draw path
+  does, instead of hidden; xwidget_end_redisplay still hides a view
+  whose glyph left the matrix.
+
+A view whose xwidget was killed is skipped: on NS nsxwidget_kill leaves
+it in the EmacsView with its model set to nil.  Touches only
+src/nsterm.m, in the ns_scroll_run that fix-ns-scroll-crash changes.
+
+diff --git a/src/nsterm.m b/src/nsterm.m
+index 943c1a8..ba7e06a 100644
+--- a/src/nsterm.m
++++ b/src/nsterm.m
+@@ -2964,6 +2964,52 @@ ns_scroll_run (struct window *w, struct run *run)
+ 
+   gui_clear_cursor (w);
+ 
++#ifdef HAVE_XWIDGETS
++  /* Move the xwidget views whose glyphs are in the copied rows, as
++     x_scroll_run does: redisplay does not draw a copied row again, so
++     nothing else moves its views.  A widget lies inside its glyph row,
++     so it is in the run when it overlaps the run's rows, whether or not
++     it is visible; the run's rows include those the copy above leaves
++     out because they lie outside the text area.  */
++  {
++    int run_y = WINDOW_TO_FRAME_PIXEL_Y (w, run->current_y);
++
++    for (NSView *subview in [FRAME_NS_VIEW (f) subviews])
++      {
++	if (![subview isKindOfClass: [XvWindow class]])
++	  continue;
++
++	struct xwidget_view *xv = ((XvWindow *) subview).xv;
++
++	/* nsxwidget_kill leaves the view of a killed xwidget in place,
++	   with no model.  */
++	if (xv->hidden || !XWIDGETP (xv->model) || XWINDOW (xv->w) != w)
++	  continue;
++
++	int widget_height = XXWIDGET (xv->model)->height;
++
++	if (xv->y >= run_y + run->height || xv->y + widget_height <= run_y)
++	  continue;
++
++	int text_area_x, text_area_y, text_area_width, text_area_height;
++	window_box (w, xv->area, &text_area_x, &text_area_y,
++		    &text_area_width, &text_area_height);
++
++	xv->y += run->desired_y - run->current_y;
++	xv->clip_top = max (0, text_area_y - xv->y);
++	xv->clip_bottom = max (xv->clip_top,
++			       min (widget_height,
++				    text_area_y + text_area_height - xv->y));
++
++	nsxwidget_move_view (xv, xv->x + xv->clip_left,
++			     xv->y + xv->clip_top);
++	nsxwidget_resize_view (xv, xv->clip_right - xv->clip_left,
++			       xv->clip_bottom - xv->clip_top);
++	nsxwidget_move_widget_in_view (xv, -xv->clip_left, -xv->clip_top);
++      }
++  }
++#endif
++
+   {
+     NSRect srcRect = NSMakeRect (x, from_y, width, height);
+     NSPoint dest = NSMakePoint (x, to_y);

@@ -20,6 +20,12 @@
 #       type (NS only) whose NSView a dynamic module supplies.  Touches only
 #       src/xwidget.c, src/nsxwidget.m and src/nsxwidget.h, which no other
 #       patch here touches.
+#   emacs-31/ns-xwidget-scroll.patch
+#       Local patch, written against the pinned revision with every patch
+#       above applied: ns_scroll_run moves xwidget views as x_scroll_run's
+#       HAVE_XWIDGETS branch does.  Touches only src/nsterm.m, in the
+#       ns_scroll_run that fix-ns-scroll-crash changes, so it is applied
+#       after that patch.
 #
 # The obsolete emacs-28 fix-window-role patch is intentionally NOT listed: the
 # pinned source already returns NSAccessibilityWindowRole, so applying it would
@@ -32,3 +38,4 @@ c9430a1ead81e313b3d2877ff6f8044fb29441eecc7cc42000515d7c8ec6380f	emacs-31/round-
 d83afd75ac58f11ac6c12a004474a81511535768544e9cd6e8c2406fed0f05bb	no-frame-refocus-cocoa.patch
 3250bf6e45cdcb3f4cbc0ace2d2d3200464331cbfb34613980554e31ec45fe6c	emacs-31/fix-ns-scroll-crash.patch
 e71e0ab429384a4b580378698c44c43284c212f3036f2eed2059b81bc3a9a561	emacs-31/native-xwidget.patch
+6c059a2e1b061643fbd2633db38858d09b47e5b3937019887cbfcf692006662e	emacs-31/ns-xwidget-scroll.patch

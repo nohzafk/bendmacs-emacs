@@ -89,7 +89,9 @@ The UI patch set is vendored under `patches/` and applied in the fixed order
 listed in `patches/ui-patches.lock`. Every patch is verified by SHA-256 and
 applied with `patch -F0` (no fuzz) by `scripts/emacs-patches.sh`, both locally
 and in CI. Provenance is the emacs-plus commit
-`6489a284d333119a05c9b0c2175bedf68250d160`.
+`6489a284d333119a05c9b0c2175bedf68250d160`. The local xwidget patches, their
+motivation and their design are explained in
+[docs/xwidget-patches.md](docs/xwidget-patches.md).
 
 - **system-appearance** - Adds the `ns-system-appearance-change-functions` hook and
   dark/light (`dark aqua`) appearance detection. Rebased to this revision: the
@@ -118,6 +120,13 @@ and in CI. Provenance is the emacs-plus commit
   against macOS 14 or later, so a widget cut by a window edge drew past it. The
   `xwidget-webkit-*` functions signal an error for a native widget. GTK and
   PGTK builds are unchanged.
+- **ns-xwidget-scroll** (local) - Moves xwidget views when `ns_scroll_run`
+  scrolls a window by copying rows, as `x_scroll_run` does on X. Without it a
+  view stays where it was drawn while its glyph moves, one line's height off
+  per line scrolled, under one-line, wheel, pixel-precision and page
+  scrolling, until a full `redraw-frame`. It selects a view by the widget's
+  whole rectangle, so a widget clipped to nothing or in a row partly outside
+  the text area moves with its row too. NS only; touches only `src/nsterm.m`.
 
 The obsolete emacs-28 **fix-window-role** patch is no longer applied: this
 revision already returns `NSAccessibilityWindowRole`, so the patch would fail

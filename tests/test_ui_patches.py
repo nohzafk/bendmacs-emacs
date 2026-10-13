@@ -36,6 +36,7 @@ ORDER = [
     "no-frame-refocus-cocoa.patch",
     "emacs-31/fix-ns-scroll-crash.patch",
     "emacs-31/native-xwidget.patch",
+    "emacs-31/ns-xwidget-scroll.patch",
 ]
 
 # SHA-256 of the audited/derived patch bytes.
@@ -145,6 +146,21 @@ class PatchLockTests(unittest.TestCase):
                    if l.startswith("+++ b/")}
         self.assertEqual(touched, {"src/xwidget.c", "src/nsxwidget.m",
                                    "src/nsxwidget.h"})
+        scl = body["emacs-31/ns-xwidget-scroll.patch"]
+        # ns_scroll_run walks the frame's xwidget views, skips a killed
+        # xwidget's stale view, and moves each by the run's displacement.
+        self.assertIn("+#ifdef HAVE_XWIDGETS", scl)
+        self.assertIn("isKindOfClass: [XvWindow class]", scl)
+        self.assertIn("!XWIDGETP (xv->model)", scl)
+        self.assertIn("xv->y += run->desired_y - run->current_y;", scl)
+        self.assertIn("nsxwidget_move_view (xv,", scl)
+        hunks = [l for l in scl.splitlines() if l.startswith("@@ ")]
+        self.assertEqual(len(hunks), 1, hunks)
+        self.assertTrue(hunks[0].endswith(
+            "@@ ns_scroll_run (struct window *w, struct run *run)"), hunks)
+        touched = {l[len("+++ b/"):] for l in scl.splitlines()
+                   if l.startswith("+++ b/")}
+        self.assertEqual(touched, {"src/nsterm.m"})
 
 
 class HelperTests(unittest.TestCase):
@@ -379,6 +395,7 @@ class RealTargetIntegrationTests(unittest.TestCase):
         self.assertIn("if (dest.y < 0)", ns)
         self.assertIn('DEFSYM (Qnative, "native")',
                       (self.tree / "src/xwidget.c").read_text())
+        self.assertIn("xv->y += run->desired_y - run->current_y;", ns)
         # Upstream accessibility role is left untouched.
         self.assertIn("return NSAccessibilityWindowRole;", ns)
         self.assertNotIn("NSAccessibilityTextFieldRole", ns)
