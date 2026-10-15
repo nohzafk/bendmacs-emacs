@@ -26,6 +26,11 @@
 #       HAVE_XWIDGETS branch does.  Touches only src/nsterm.m, in the
 #       ns_scroll_run that fix-ns-scroll-crash changes, so it is applied
 #       after that patch.
+#   emacs-31/ns-child-frame-resize.patch
+#       Local patch, written against the pinned revision with every patch
+#       above applied: a two-step window grow for chrome-less NS child
+#       frames.  Touches src/nsterm.m, src/nsterm.h and src/nsfns.m, so it
+#       is applied after every patch above.
 #
 # The obsolete emacs-28 fix-window-role patch is intentionally NOT listed: the
 # pinned source already returns NSAccessibilityWindowRole, so applying it would
@@ -39,3 +44,4 @@ d83afd75ac58f11ac6c12a004474a81511535768544e9cd6e8c2406fed0f05bb	no-frame-refocu
 3250bf6e45cdcb3f4cbc0ace2d2d3200464331cbfb34613980554e31ec45fe6c	emacs-31/fix-ns-scroll-crash.patch
 e71e0ab429384a4b580378698c44c43284c212f3036f2eed2059b81bc3a9a561	emacs-31/native-xwidget.patch
 6c059a2e1b061643fbd2633db38858d09b47e5b3937019887cbfcf692006662e	emacs-31/ns-xwidget-scroll.patch
+7e0e6d0a56cba207d3c5aad7942def84979e95aacb1264907fe50a4cc4e56be5	emacs-31/ns-child-frame-resize.patch

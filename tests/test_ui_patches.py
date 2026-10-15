@@ -37,6 +37,7 @@ ORDER = [
     "emacs-31/fix-ns-scroll-crash.patch",
     "emacs-31/native-xwidget.patch",
     "emacs-31/ns-xwidget-scroll.patch",
+    "emacs-31/ns-child-frame-resize.patch",
 ]
 
 # SHA-256 of the audited/derived patch bytes.
@@ -161,6 +162,21 @@ class PatchLockTests(unittest.TestCase):
         touched = {l[len("+++ b/"):] for l in scl.splitlines()
                    if l.startswith("+++ b/")}
         self.assertEqual(touched, {"src/nsterm.m"})
+        cfr = body["emacs-31/ns-child-frame-resize.patch"]
+        # Two-step grow of a chrome-less child frame, held view and layer,
+        # a cancellable step 2, and a clear window for child frames only.
+        self.assertIn("ns_child_frame_grow", cfr)
+        self.assertIn("childGrowHold", cfr)
+        self.assertIn("cancelPreviousPerformRequestsWithTarget", cfr)
+        self.assertIn("afterDelay:0.02", cfr)
+        self.assertIn("ns_update_window_opacity", cfr)
+        self.assertIn("if (!FRAME_PARENT_FRAME (f))", cfr)
+        for debug in ("NSLog", "DBG", "EMACS_NS_RESIZE_MODE"):
+            self.assertNotIn(debug, cfr)
+        touched = {l[len("+++ b/"):] for l in cfr.splitlines()
+                   if l.startswith("+++ b/")}
+        self.assertEqual(touched, {"src/nsterm.m", "src/nsterm.h",
+                                   "src/nsfns.m"})
 
 
 class HelperTests(unittest.TestCase):

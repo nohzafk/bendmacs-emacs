@@ -1,0 +1,301 @@
+ns-child-frame-resize: show the new area when a chrome-less child frame grows.
+
+NS (Cocoa) only.  Growing a child frame that has no window chrome
+(undecorated, or undecorated-round) through one -[NSWindow setFrame:]
+shows the added area black for one or more display frames: the commits
+that land in the display frame of the shape change are presented clipped
+to the old size at the new origin, until a commit in a later frame.
+display:YES, a CATransaction flush, -displayIfNeeded, drawing before the
+resize and changes to the layer's actions or contentsGravity do not help.
+A titled window (decorated frames) is not affected.
+
+ns_set_window_size and ns_set_window_size_and_position now grow such a
+window in two steps.  change_frame_size runs first as before, so Lisp sees
+the new size at once.  Step 1 sets the window frame to the union of its
+current size and the new size, at its current origin, while the EmacsView
+is held at its old frame: resizeWithOldSuperviewSize: puts the view back
+and skips its bookkeeping, and [EmacsLayer display] draws nothing, so the
+screen does not change.  Step 2, 20 ms later (a cancellable delayed
+perform on the view), clears the hold, sets the final window frame, sizes
+the view to its superview, does the bookkeeping of
+resizeWithOldSuperviewSize: and redisplays, guarded as in
+layoutSublayersOfLayer:, so the new surface is committed with the new
+area.  A new resize cancels a pending step 2 and starts again from the
+current window frame; deleting the frame cancels it.  Shrinks, moves,
+top-level frames and decorated frames use the single -setFrame: as before.
+constrainFrameRect:toScreen: already returns its argument for child
+frames, so it does not alter the step 1 rectangle.
+
+The extension of step 1 must not be visible, so the window of a child
+frame is non-opaque with a clear background.  ns_update_window_opacity
+sets that and, when a frame gains or loses its parent frame, sets it or
+restores the default face background; ns_set_background_color leaves the
+window of a child frame alone.  Windows of top-level frames, undecorated
+ones included, keep their opacity and background.  Touches only
+src/nsterm.m, src/nsterm.h and src/nsfns.m.
+
+--- a/src/nsterm.h
++++ b/src/nsterm.h
+@@ -485,6 +485,10 @@
+   struct frame *emacsframe;
+   int scrollbarsNeedingUpdate;
+   NSRect ns_userRect;
++  /* Two-step grow of a child frame's window; see ns_child_frame_grow.  */
++  BOOL childGrowHold;
++  NSRect childGrowViewFrame;
++  NSRect childGrowFinalFrame;
+ }
+ 
+ /* AppKit-side interface.  */
+@@ -501,6 +505,8 @@
+ - (void) setWindowClosing: (BOOL)closing;
+ - (void) deleteWorkingText;
+ - (void) handleFS;
++- (void) childGrowStep2;
++- (void) cancelChildGrow;
+ - (void) setFSValue: (int)value;
+ - (void) toggleFullScreen: (id) sender;
+ - (BOOL) fsIsNative;
+--- a/src/nsterm.m
++++ b/src/nsterm.m
+@@ -1756,6 +1756,8 @@
+   [(EmacsView *)view setWindowClosing: YES]; /* may not have been informed */
+ 
+   block_input ();
++
++  [(EmacsView *)view cancelChildGrow];
+ 
+   free_frame_menubar (f);
+   free_frame_faces (f);
+@@ -1871,6 +1873,82 @@
+   f->size_hint_flags &= ~(XNegative|YNegative);
+ 
+   unblock_input ();
++}
++
++/* Child frame windows are non-opaque with a clear background, so that
++   the window area added by ns_child_frame_grow is invisible; other
++   windows keep the background color of their default face.  */
++static void
++ns_update_window_opacity (struct frame *f)
++{
++  NSWindow *window = [FRAME_NS_VIEW (f) window];
++  NSColor *col;
++
++  if (window == nil)
++    return;
++
++  if (FRAME_PARENT_FRAME (f))
++    {
++      [window setBackgroundColor:[NSColor clearColor]];
++      [window setOpaque:NO];
++    }
++  else
++    {
++      col = [NSColor colorWithUnsignedLong:NS_FACE_BACKGROUND
++                                     (FACE_FROM_ID (f, DEFAULT_FACE_ID))];
++      [window setBackgroundColor:col];
++      [window setOpaque:[col alphaComponent] == (EmacsCGFloat) 1.0];
++    }
++}
++
++/* Grow the window of child frame F to FRAME_RECT in two steps.
++
++   A chrome-less window (borderless, or titled with a full-size content
++   view) that grows through a single -setFrame: is presented, until a
++   later display frame, with the new area black: the commits that land in
++   the display frame of the shape change are clipped to the old size.
++   So the window is first extended to cover both the old and the new
++   size, while the EmacsView keeps its old frame and draws nothing, which
++   leaves the screen as it was.  A display frame later,
++   -[EmacsView childGrowStep2] applies the final frame and draws the new
++   surface.  The window is non-opaque with a clear background (see
++   ns_update_window_opacity), so the extension is invisible.
++
++   Return true if the grow was done in this way; the caller then must
++   not call -setFrame: itself.  Return false for every other resize.
++   Any pending step 2 is cancelled first.  */
++static bool
++ns_child_frame_grow (struct frame *f, EmacsView *view, NSWindow *window,
++                     NSRect frameRect)
++{
++  NSWindowStyleMask mask = [window styleMask];
++  NSRect cur, view_frame, step1;
++
++  [view cancelChildGrow];
++
++  if (!FRAME_PARENT_FRAME (f) || ![window isVisible]
++      || ((mask & NSWindowStyleMaskTitled)
++          && !(mask & NSWindowStyleMaskFullSizeContentView)))
++    return false;
++
++  view_frame = [view frame];
++  if (NSWidth (frameRect) <= NSWidth (view_frame)
++      && NSHeight (frameRect) <= NSHeight (view_frame))
++    return false;
++
++  cur = [window frame];
++  step1 = cur;
++  step1.size.width = MAX (NSWidth (cur), NSWidth (frameRect));
++  step1.size.height = MAX (NSHeight (cur), NSHeight (frameRect));
++
++  view->childGrowViewFrame = view_frame;
++  view->childGrowFinalFrame = frameRect;
++  view->childGrowHold = YES;
++  [window setFrame:step1 display:NO];
++  [view performSelector:@selector (childGrowStep2)
++             withObject:nil
++             afterDelay:0.02];
++  return true;
+ }
+ 
+ static void
+@@ -1911,7 +1989,8 @@
+      can end up using old values so don't delay here.  */
+   change_frame_size (f, width, height, false, NO, false);
+ 
+-  [window setFrame:frameRect display:NO];
++  if (!ns_child_frame_grow (f, view, window, frameRect))
++    [window setFrame:frameRect display:NO];
+ 
+   unblock_input ();
+ }
+@@ -1951,7 +2030,8 @@
+      series of actions are taken with no redisplay between them then we
+      can end up using old values so don't delay here.  */
+   change_frame_size (f, width, height, false, NO, false);
+-  [window setFrame:frameRect display:NO];
++  if (!ns_child_frame_grow (f, view, window, frameRect))
++    [window setFrame:frameRect display:NO];
+   f->size_hint_flags &= ~(XNegative|YNegative);
+ 
+   unblock_input ();
+@@ -2085,6 +2165,8 @@
+ 
+   block_input ();
+   [(EmacsWindow *)[FRAME_NS_VIEW (f) window] setParentChildRelationships];
++  if (!EQ (new_value, old_value) && (NILP (new_value) || NILP (old_value)))
++    ns_update_window_opacity (f);
+   unblock_input ();
+ }
+ 
+@@ -8547,6 +8629,13 @@
+   NSTRACE ("[EmacsView resizeWithOldSuperviewSize:]");
+ 
+   [super resizeWithOldSuperviewSize:oldSize];
++
++  /* ns_child_frame_grow keeps the view at its old frame meanwhile.  */
++  if (childGrowHold)
++    {
++      [self setFrame:childGrowViewFrame];
++      return;
++    }
+ 
+   if (! FRAME_LIVE_P (emacsframe))
+     return;
+@@ -8563,13 +8652,56 @@
+      wrong origin.  */
+   [self setFrame:frame];
+   change_frame_size (emacsframe, width, height, false, YES, false);
++
++  SET_FRAME_GARBAGED (emacsframe);
++  cancel_mouse_face (emacsframe);
++  ns_send_appdefined (-1);
++}
++
++
++/* Step 2 of ns_child_frame_grow: apply the final window frame, resize the
++   view with it and draw, so that the new surface is committed in the
++   display frame in which the new area first shows.  */
++- (void)childGrowStep2
++{
++  NSWindow *window = [self window];
++
++  childGrowHold = NO;
++
++  if (window == nil || ! FRAME_LIVE_P (emacsframe))
++    return;
+ 
++  block_input ();
++  [window setFrame:childGrowFinalFrame display:NO];
++
++  NSRect frame = [[self superview] bounds];
++  [self setFrame:frame];
++  change_frame_size (emacsframe, (int)NSWidth (frame), (int)NSHeight (frame),
++                     false, YES, false);
+   SET_FRAME_GARBAGED (emacsframe);
+   cancel_mouse_face (emacsframe);
+   ns_send_appdefined (-1);
++
++  if (!redisplaying_p)
++    {
++      bool owfi = waiting_for_input;
++      waiting_for_input = 0;
++      redisplay ();
++      waiting_for_input = owfi;
++    }
++  unblock_input ();
+ }
+ 
++/* Drop a pending step 2 and the hold.  */
++- (void)cancelChildGrow
++{
++  [NSObject cancelPreviousPerformRequestsWithTarget:self
++                                           selector:@selector (childGrowStep2)
++                                             object:nil];
++  childGrowHold = NO;
++}
+ 
++
+ - (void)windowDidBecomeKey: (NSNotification *)notification
+ /* cf. x_detect_focus_change(), x_focus_changed(), x_new_focus_frame() */
+ {
+@@ -10032,6 +10164,11 @@
+       [self setBackgroundColor:col];
+       if ([col alphaComponent] != (EmacsCGFloat) 1.0)
+         [self setOpaque:NO];
++      if (FRAME_PARENT_FRAME (f))
++        {
++          [self setBackgroundColor:[NSColor clearColor]];
++          [self setOpaque:NO];
++        }
+ 
+       /* toolbar support */
+       [self createToolbar:f];
+@@ -11533,6 +11670,11 @@
+ - (void) display
+ {
+   NSTRACE_WHEN (NSTRACE_GROUP_FOCUS, "[EmacsLayer display]");
++
++  /* The window is being grown in two steps; draw nothing until step 2.  */
++  if ([[self delegate] isKindOfClass:[EmacsView class]]
++      && ((EmacsView *) [self delegate])->childGrowHold)
++    return;
+ 
+   if (context && context != [[NSGraphicsContext currentContext] CGContext])
+     {
+--- a/src/nsfns.m
++++ b/src/nsfns.m
+@@ -314,12 +314,17 @@
+ 
+   if (view != nil)
+     {
+-      [[view window] setBackgroundColor: col];
++      /* The window of a child frame stays clear; see
++         ns_update_window_opacity.  */
++      if (!FRAME_PARENT_FRAME (f))
++        {
++          [[view window] setBackgroundColor: col];
+ 
+-      if (alpha != (EmacsCGFloat) 1.0)
+-          [[view window] setOpaque: NO];
+-      else
+-          [[view window] setOpaque: YES];
++          if (alpha != (EmacsCGFloat) 1.0)
++              [[view window] setOpaque: NO];
++          else
++              [[view window] setOpaque: YES];
++        }
+ 
+       face = FRAME_DEFAULT_FACE (f);
+       if (face)

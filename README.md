@@ -139,6 +139,14 @@ at commit `6489a284d333119a05c9b0c2175bedf68250d160`.
   scrolling, until a full `redraw-frame`. It selects a view by the widget's
   whole rectangle, so a widget clipped to nothing or in a row partly outside
   the text area moves with its row too. NS only; touches only `src/nsterm.m`.
+- **ns-child-frame-resize** (local) - Growing a chrome-less child frame
+  (`undecorated` or `undecorated-round`) through one `setFrame:` shows the new
+  area black for a display frame or more; AppKit presents the commits of the
+  resize frame clipped to the old size. The patch grows the window first
+  while the view holds its old frame and draws nothing, then applies the final
+  frame 20 ms later and draws. Child-frame windows become non-opaque with a
+  clear background for it; top-level and decorated frames are unchanged. NS
+  only; touches `src/nsterm.m`, `src/nsterm.h` and `src/nsfns.m`.
 
 The obsolete emacs-28 **fix-window-role** patch is not applied: this
 revision already returns `NSAccessibilityWindowRole`, so the patch would fail
