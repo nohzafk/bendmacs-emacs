@@ -5,7 +5,8 @@
 This repository builds the `Emacs.app` that bendmacs runs on: GNU Emacs
 31.1 for macOS on Apple silicon, built from the release commit (pinned by
 its full SHA, not by tag), with its dependencies linked statically, the
-emacs-plus UI patches, and two local patches to Emacs's xwidget support.
+emacs-plus UI patches, two local patches to Emacs's xwidget support, and
+the RysMono Nerd Font Mono font the bendmacs config uses.
 
 bendmacs draws parts of its interface inside Emacs buffers with views that
 are not text: a WebKit page, or a view that a dynamic module draws with the
@@ -24,10 +25,10 @@ and this repository's build number, and never moves:
 
 | | |
 |---|---|
-| Tag | `emacs-31.1-bendmacs.3` |
-| Title | Emacs 31.1, bendmacs build 3 |
-| Asset | `Emacs-31.1-bendmacs.3.tar.xz`, a tarball holding `Emacs.app` |
-| Digest | `Emacs-31.1-bendmacs.3.tar.xz.sha256`, beside the asset |
+| Tag | `emacs-31.1-bendmacs.4` |
+| Title | Emacs 31.1, bendmacs build 4 |
+| Asset | `Emacs-31.1-bendmacs.4.tar.xz`, a tarball holding `Emacs.app` |
+| Digest | `Emacs-31.1-bendmacs.4.tar.xz.sha256`, beside the asset |
 
 The build number is `EMACS_BUILD_NUMBER` in `scripts/emacs-source.lock`.
 Bump it by hand whenever the patch set, the configure arguments or a
@@ -51,19 +52,19 @@ patches (`patchset=321c4e22…`); `v30.2` is the last Emacs 30 build.
 Download the asset and its digest, and check one against the other:
 
 ```bash
-curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.3/Emacs-31.1-bendmacs.3.tar.xz
+curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.4/Emacs-31.1-bendmacs.4.tar.xz
 ```
 
 ```bash
-curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.3/Emacs-31.1-bendmacs.3.tar.xz.sha256
+curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.4/Emacs-31.1-bendmacs.4.tar.xz.sha256
 ```
 
 ```bash
-shasum -a 256 -c Emacs-31.1-bendmacs.3.tar.xz.sha256
+shasum -a 256 -c Emacs-31.1-bendmacs.4.tar.xz.sha256
 ```
 
 ```bash
-tar -xJf Emacs-31.1-bendmacs.3.tar.xz
+tar -xJf Emacs-31.1-bendmacs.4.tar.xz
 ```
 
 The bundle carries three provenance markers in `Emacs.app/Contents/Resources/`:
@@ -94,6 +95,39 @@ attributes:
 ```bash
 ditto Emacs.app /Applications/Emacs.app
 ```
+
+## The bundled font
+
+The app carries RysMono Nerd Font Mono in ten faces (Regular, Italic, Medium,
+MediumItalic, SemiBold, SemiBoldItalic, Bold, BoldItalic, ExtraBold,
+ExtraBoldItalic), so the bendmacs config works without a system font install.
+The fonts sit in `Emacs.app/Contents/Resources/Fonts/` beside `OFL.txt`, the
+font's license, and `Info.plist` sets `ATSApplicationFontsPath` to `Fonts/`.
+They are loaded for this app only; nothing is installed system-wide.
+
+`scripts/emacs-font.sh` builds them from [Rysana Type](https://github.com/rysana-os/type)
+1.0.0 (`rysana-type.zip`) with Nerd Fonts `font-patcher` 3.5.1. Both inputs are
+pinned by version and SHA-256 in `scripts/emacs-font.lock`. The local build
+and CI run the same code, and it runs before the bundle is signed. The patcher
+runs under `fontforge`: put it on `PATH` (for example `brew install fontforge`)
+or point `EMACS_FONT_FONTFORGE` at it.
+
+- The patched font is not called Rysana. "Rysana" is a Reserved Font Name in
+  the OFL, so a modified font may not carry it: every name record except the
+  copyright and license ones says "Rys" instead, and the files are
+  `RysMono-<Face>.ttf`. `post.isFixedPitch` is set back to 1, because the
+  patcher clears it.
+- Flags: `--complete --single-width-glyphs --careful --cell 0:600:-300:1010`.
+  Not `--mono`: it would squash the font's own two-cell glyphs (Hangul,
+  fractions, arrows) into one cell. The cell is forced because the patcher
+  would otherwise take the most common advance, 1200 (Hangul), as the cell
+  width and every icon would come out two cells wide; 600 is the Latin advance.
+  `--careful` keeps Rysana's own powerline glyphs.
+- A change to the font, the patcher or the flags changes the bundle, so it
+  needs a new `EMACS_BUILD_NUMBER`. A reused local `Emacs.app` without the
+  fonts is refused.
+- The release notes list the font version, the digest of the zip and the
+  patcher version.
 
 ## The patch set
 
@@ -192,6 +226,7 @@ env -u BASH_ENV python3 tests/test_source_pin.py
 env -u BASH_ENV python3 tests/test_ui_patches.py
 env -u BASH_ENV python3 tests/test_configure_policy.py
 env -u BASH_ENV python3 tests/test_bundle_sign.py
+env -u BASH_ENV python3 tests/test_font_bundle.py
 ```
 
 `BASH_ENV` is unset because every bash the tests start would source it,
@@ -258,7 +293,7 @@ errors in terminal mode.
 - Commit: `a360712c9d272d950d8d8255ef74570f7e90b7d9`
 - Release: `emacs-31.1` (the upstream annotated tag points at this commit)
 - Label: `31-snapshot-a360712c9d272d950d8d8255ef74570f7e90b7d9`
-- Build number: `2`
+- Build number: `4`
 
 The shared helper fetches only this full commit SHA into a detached Git checkout.
 It does not follow `master`, an Emacs 31 branch, or the release tag itself: the

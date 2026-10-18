@@ -19,6 +19,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/scripts/emacs-source.sh"
 source "$REPO_ROOT/scripts/emacs-patches.sh"
 source "$REPO_ROOT/scripts/emacs-configure.sh"
+source "$REPO_ROOT/scripts/emacs-font.sh"
 source "$REPO_ROOT/scripts/emacs-sign.sh"
 PREFIX="${PREFIX:-$REPO_ROOT/build/prefix}"
 WORK="${WORK:-$REPO_ROOT/build/work}"
@@ -162,11 +163,13 @@ stage_emacs() {
   if [[ -e "$src" || -L "$src" ]]; then emacs_validate_source "$src"; fi
   if [[ -e "$OUT/Contents/MacOS/Emacs" ]]; then
     emacs_verify_bundle "$OUT"
+    emacs_font_check_bundle "$OUT"
     skip "Emacs $EMACS_SOURCE_LABEL"
     return
   fi
   log "Emacs $EMACS_SOURCE_LABEL"
   emacs_prepare_source "$src"
+  emacs_font_prepare "${FONT_WORK:-$WORK/font}"
 
   # Patch dir: fixed, vendored set in patches/, selected and applied from
   # patches/ui-patches.lock.  The exact same code path (SHA-256 verification,
@@ -189,6 +192,7 @@ stage_emacs() {
   emacs_mark_output "$OUT"
   emacs_mark_patches "$OUT"
   emacs_mark_configuration "$OUT" "$PREFIX"
+  emacs_font_install_bundle "$OUT" "${FONT_WORK:-$WORK/font}"
   emacs_sign_bundle "$OUT"
   log "Built: $OUT"
 }

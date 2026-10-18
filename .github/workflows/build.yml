@@ -77,6 +77,13 @@ jobs:
         run: |
           source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
           emacs_check_release_tag_free "$GITHUB_WORKSPACE"
+      - name: Prepare the bundled font
+        run: |
+          # Before Homebrew is removed: font-patcher runs under fontforge.
+          brew install fontforge
+          source "$GITHUB_WORKSPACE/scripts/emacs-font.sh"
+          emacs_font_prepare "$RUNNER_TEMP/font"
+          echo "EMACS_FONT_WORK=$RUNNER_TEMP/font" >> "$GITHUB_ENV"
       - name: Uninstall Homebrew
         run: |
           curl $CURL_OPTS -O https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh
@@ -209,6 +216,7 @@ jobs:
           source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-configure.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-font.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-sign.sh"
           emacs_prepare_source "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
           cd "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
@@ -224,6 +232,7 @@ jobs:
           emacs_mark_output Emacs.app
           emacs_mark_patches Emacs.app
           emacs_mark_configuration Emacs.app
+          emacs_font_install_bundle Emacs.app "$EMACS_FONT_WORK"
           emacs_sign_bundle Emacs.app
           tar -Jcf "$EMACS_ARTIFACT" Emacs.app
           shasum -a 256 "$EMACS_ARTIFACT" > "$EMACS_ARTIFACT.sha256"
@@ -231,6 +240,7 @@ jobs:
         run: |
           source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-font.sh"
           cd "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
           # The notes describe the bundle being published: its markers must
           # be the ones this commit's locks produce.
@@ -247,6 +257,8 @@ jobs:
             emacs_patch_entries | while IFS=$'\t' read -r _ path; do
               printf '  - `%s`\n' "$path"
             done
+            printf -- '- Bundled font: Rysana Mono %s (`rysana-type.zip` SHA-256 `%s`), patched with Nerd Fonts font-patcher %s and renamed "%s"; app-local, in `Contents/Resources/Fonts/`.\n' \
+              "$EMACS_FONT_VERSION" "$EMACS_FONT_SHA256" "$EMACS_FONT_PATCHER_VERSION" "$EMACS_FONT_FAMILY"
             printf -- '- Verify the download: `shasum -a 256 -c %s.sha256`.\n' "$EMACS_ARTIFACT"
           } > release-notes.md
           cat release-notes.md

@@ -1,0 +1,15 @@
+# Bundled font lock. Both local builds and CI load this file.
+# The app ships Rysana Mono, patched with Nerd Fonts glyphs and renamed
+# RysMono, so the bendmacs config needs no system font install. Both inputs
+# are pinned by version and SHA-256 of the downloaded file.
+# A change to any value here changes the bundle: bump EMACS_BUILD_NUMBER in
+# scripts/emacs-source.lock with it.
+readonly EMACS_FONT_VERSION="1.0.0"
+readonly EMACS_FONT_URL="https://github.com/rysana-os/type/releases/download/v${EMACS_FONT_VERSION}/rysana-type.zip"
+readonly EMACS_FONT_SHA256="4888f504a9b4c13f12cea08112c3e463c6879ba439d4790216842ce8e0b35812"
+readonly EMACS_FONT_PATCHER_VERSION="3.5.1"
+readonly EMACS_FONT_PATCHER_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v${EMACS_FONT_PATCHER_VERSION}/FontPatcher.zip"
+readonly EMACS_FONT_PATCHER_SHA256="42bcb32145499a35732274c7fc48deb434ad0d2e0e118f98527c1479c6fa251a"
+# Used only to rename the patched faces; it does not change their bytes
+# beyond the name table and post.isFixedPitch.
+readonly EMACS_FONT_FONTTOOLS_VERSION="4.67.0"
