@@ -25,10 +25,10 @@ and this repository's build number, and never moves:
 
 | | |
 |---|---|
-| Tag | `emacs-31.1-bendmacs.4` |
-| Title | Emacs 31.1, bendmacs build 4 |
-| Asset | `Emacs-31.1-bendmacs.4.tar.xz`, a tarball holding `Emacs.app` |
-| Digest | `Emacs-31.1-bendmacs.4.tar.xz.sha256`, beside the asset |
+| Tag | `emacs-31.1-bendmacs.5` |
+| Title | Emacs 31.1, bendmacs build 5 |
+| Asset | `Emacs-31.1-bendmacs.5.tar.xz`, a tarball holding `Emacs.app` |
+| Digest | `Emacs-31.1-bendmacs.5.tar.xz.sha256`, beside the asset |
 
 The build number is `EMACS_BUILD_NUMBER` in `scripts/emacs-source.lock`.
 Bump it by hand whenever the patch set, the configure arguments or a
@@ -52,19 +52,19 @@ patches (`patchset=321c4e22…`); `v30.2` is the last Emacs 30 build.
 Download the asset and its digest, and check one against the other:
 
 ```bash
-curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.4/Emacs-31.1-bendmacs.4.tar.xz
+curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.5/Emacs-31.1-bendmacs.5.tar.xz
 ```
 
 ```bash
-curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.4/Emacs-31.1-bendmacs.4.tar.xz.sha256
+curl -fLO https://github.com/nohzafk/bendmacs-emacs/releases/download/emacs-31.1-bendmacs.5/Emacs-31.1-bendmacs.5.tar.xz.sha256
 ```
 
 ```bash
-shasum -a 256 -c Emacs-31.1-bendmacs.4.tar.xz.sha256
+shasum -a 256 -c Emacs-31.1-bendmacs.5.tar.xz.sha256
 ```
 
 ```bash
-tar -xJf Emacs-31.1-bendmacs.4.tar.xz
+tar -xJf Emacs-31.1-bendmacs.5.tar.xz
 ```
 
 The bundle carries three provenance markers in `Emacs.app/Contents/Resources/`:
