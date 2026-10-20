@@ -50,9 +50,18 @@ class FontLockTests(unittest.TestCase):
         self.assertIn("isFixedPitch = 1", py)
         self.assertIn('"Rysana"', py)
 
+    def test_hangul_is_removed_before_patching(self):
+        py = (ROOT / "scripts/emacs-font-subset.py").read_text()
+        for lo, hi in (("0x1100", "0x11FF"), ("0x3130", "0x318F"), ("0xA960", "0xA97F"),
+                       ("0xAC00", "0xD7FF"), ("0xFFA0", "0xFFDF")):
+            self.assertIn(f"({lo}, {hi})", py)
+        prepare = SH.split("emacs_font_prepare() {", 1)[1]
+        self.assertLess(prepare.index("emacs-font-subset.py"), prepare.index("font-patcher"))
+
     def test_build_number_was_bumped(self):
+        # 5: the bundled font lost its Hangul.
         src = (ROOT / "scripts/emacs-source.lock").read_text()
-        self.assertRegex(src, r'EMACS_BUILD_NUMBER="([4-9]|\d\d+)"')
+        self.assertRegex(src, r'EMACS_BUILD_NUMBER="([5-9]|\d\d+)"')
 
     def test_installed_before_signing_locally(self):
         stage = LOCAL.split("stage_emacs() {", 1)[1]

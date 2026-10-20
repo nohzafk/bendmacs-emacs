@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Bundled font: Rysana Mono patched with Nerd Fonts glyphs, renamed RysMono,
+# Bundled font: Rysana Mono without its Hangul, patched with Nerd Fonts glyphs,
+# renamed RysMono,
 # loaded app-locally. Sourced by scripts/build.sh and the release workflow, so
 # both run the same code. Pins are in scripts/emacs-font.lock.
 #
@@ -7,7 +8,8 @@
 #   emacs_font_install_bundle APP DIR   copy into APP; run before emacs_sign_bundle
 #
 # Needs `fontforge` on PATH (override with EMACS_FONT_FONTFORGE), plus curl,
-# unzip and python3 with venv.
+# unzip and python3 with venv. The ttf files under DIR/src are subset in place:
+# a rerun unzips them afresh first.
 _EMACS_FONT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_EMACS_FONT_DIR/emacs-font.lock"
 
@@ -18,10 +20,10 @@ readonly EMACS_FONT_FACES=(
   Bold BoldItalic ExtraBold ExtraBoldItalic
 )
 # --single-width-glyphs, not --mono: --mono would also squash the font's own
-#   two-cell glyphs (Hangul, fractions, arrows) into one cell.
-# --cell 0:600:-300:1010 fixes the cell: left to itself the patcher takes the
-#   most common advance (1200, Hangul) as the cell width and icons come out
-#   two cells wide. 600 is the Latin advance; -300 and 1010 are the font's
+#   two-cell glyphs (fractions, arrows) into one cell.
+# --cell 0:600:-300:1010 fixes the cell: left to itself the patcher guesses it
+#   from the font's advances (with Hangul, the most common was 1200) and icons
+#   can come out two cells wide. 600 is the Latin advance; -300 and 1010 are the font's
 #   descent and ascent.
 # --careful keeps Rysana's own powerline glyphs.
 readonly EMACS_FONT_PATCH_FLAGS=(
@@ -51,12 +53,18 @@ emacs_font_prepare() {
   emacs_font_fetch "$EMACS_FONT_PATCHER_URL" "$EMACS_FONT_PATCHER_SHA256" "$dir/FontPatcher.zip" || return 1
   unzip -q -o "$dir/rysana-type.zip" -d "$dir/src" || return 1
   unzip -q -o "$dir/FontPatcher.zip" -d "$dir/patcher" || return 1
+  python3 -m venv "$dir/venv" || return 1
+  "$dir/venv/bin/pip" install --quiet "fonttools==$EMACS_FONT_FONTTOOLS_VERSION" || return 1
+  # Hangul goes before patching, so the patcher works on the smaller font.
+  local src=()
+  for face in "${EMACS_FONT_FACES[@]}"; do
+    src+=("$dir/src/rysana-type/ttf/RysanaMono-$face.ttf")
+  done
+  "$dir/venv/bin/python" "$_EMACS_FONT_DIR/emacs-font-subset.py" "${src[@]}" || return 1
   for face in "${EMACS_FONT_FACES[@]}"; do
     "$fontforge" -quiet -script "$dir/patcher/font-patcher" "${EMACS_FONT_PATCH_FLAGS[@]}" \
       --outputdir "$dir/fonts" "$dir/src/rysana-type/ttf/RysanaMono-$face.ttf" >&2 || return 1
   done
-  python3 -m venv "$dir/venv" || return 1
-  "$dir/venv/bin/pip" install --quiet "fonttools==$EMACS_FONT_FONTTOOLS_VERSION" || return 1
   "$dir/venv/bin/python" "$_EMACS_FONT_DIR/emacs-font-rename.py" "$dir"/fonts/*.ttf || return 1
   for face in "${EMACS_FONT_FACES[@]}"; do
     out="$dir/fonts/RysMono-$face.ttf"

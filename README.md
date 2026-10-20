@@ -106,7 +106,7 @@ font's license, and `Info.plist` sets `ATSApplicationFontsPath` to `Fonts/`.
 They are loaded for this app only; nothing is installed system-wide.
 
 `scripts/emacs-font.sh` builds them from [Rysana Type](https://github.com/rysana-os/type)
-1.0.0 (`rysana-type.zip`) with Nerd Fonts `font-patcher` 3.5.1. Both inputs are
+1.0.0 (`rysana-type.zip`), less its Hangul, with Nerd Fonts `font-patcher` 3.5.1. Both inputs are
 pinned by version and SHA-256 in `scripts/emacs-font.lock`. The local build
 and CI run the same code, and it runs before the bundle is signed. The patcher
 runs under `fontforge`: put it on `PATH` (for example `brew install fontforge`)
@@ -117,11 +117,17 @@ or point `EMACS_FONT_FONTFORGE` at it.
   copyright and license ones says "Rys" instead, and the files are
   `RysMono-<Face>.ttf`. `post.isFixedPitch` is set back to 1, because the
   patcher clears it.
+- Hangul is removed before patching (`scripts/emacs-font-subset.py`): the
+  codepoints Emacs 31.1's `char-script-table` gives the `hangul` script,
+  11,223 of the font's 29,383 glyphs and a quarter of each file. bendmacs
+  draws that script with its CJK font, so the mono font's Hangul was never
+  shown. The Nerd Fonts glyphs stay.
 - Flags: `--complete --single-width-glyphs --careful --cell 0:600:-300:1010`.
-  Not `--mono`: it would squash the font's own two-cell glyphs (Hangul,
-  fractions, arrows) into one cell. The cell is forced because the patcher
-  would otherwise take the most common advance, 1200 (Hangul), as the cell
-  width and every icon would come out two cells wide; 600 is the Latin advance.
+  Not `--mono`: it would squash the font's own two-cell glyphs (fractions,
+  arrows) into one cell. The cell is forced because the patcher would
+  otherwise guess it from the font's advances (with Hangul in the font the
+  most common was 1200) and icons could come out two cells wide; 600 is the
+  Latin advance.
   `--careful` keeps Rysana's own powerline glyphs.
 - A change to the font, the patcher or the flags changes the bundle, so it
   needs a new `EMACS_BUILD_NUMBER`. A reused local `Emacs.app` without the

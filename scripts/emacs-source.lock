@@ -12,4 +12,4 @@ readonly EMACS_SOURCE_RELEASE_NAME="Emacs 31.1"
 # the patch set, the configure arguments or a dependency changes: the release
 # is tagged emacs-<version>-bendmacs.<N>, a published tag is never moved, and
 # CI refuses to build a number whose tag already exists.
-readonly EMACS_BUILD_NUMBER="4"
+readonly EMACS_BUILD_NUMBER="5"
