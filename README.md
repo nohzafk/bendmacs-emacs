@@ -281,8 +281,12 @@ Native Elisp compilation is explicitly disabled with
 `--without-native-compilation`. No GCC/libgccjit dependency is added.
 The Cocoa `--with-xwidgets` path uses the macOS SDK and system WebKit;
 it does not require GTK, WebKitGTK, libsoup, or a bundled browser engine.
-The tests here do not run the built Emacs, so they do not cover WebKit at
-run time.
+The build keeps `--with-xwidgets` because the `native-xwidget` patch builds
+on the xwidget glyph layout and view containers that stock Emacs compiles
+only under `HAVE_XWIDGETS`. bendmacs no longer creates a WebKit view at run
+time: every widget is a `native` xwidget, and Mermaid is compiled in-process
+(bendmacs's `docs/design/140-ondine-mermaid.md`). The tests here do not run
+the built Emacs, so they do not cover xwidgets at run time.
 
 No package manager is used during the build: every dependency is fetched
 from its upstream and compiled from source, and Emacs links them
