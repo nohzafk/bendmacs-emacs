@@ -5,17 +5,26 @@
 This repository builds the `Emacs.app` that bendmacs runs on: GNU Emacs
 31.1 for macOS on Apple silicon, built from the release commit (pinned by
 its full SHA, not by tag), with its dependencies linked statically, the
-emacs-plus UI patches, two local patches to Emacs's xwidget support, and
-the RysMono Nerd Font Mono font the bendmacs config uses.
+emacs-plus UI patches, local patches to Emacs's xwidget support and to
+child-frame resizing, and the RysMono Nerd Font Mono font the bendmacs
+config uses.
 
-bendmacs draws parts of its interface inside Emacs buffers with views that
-are not text: a WebKit page, or a view that a dynamic module draws with the
-GPU. Stock Emacs places, clips and hides only WebKit views, and on macOS it
-leaves every xwidget view behind when a window scrolls by copying rows.
-The two local patches add a `native` xwidget type whose `NSView` a dynamic
-module supplies, and make xwidget views follow scrolling as they do on X.
-Why each patch is shaped the way it is, and what it leaves alone, is in
-[docs/xwidget-patches.md](docs/xwidget-patches.md).
+bendmacs draws parts of its interface inside Emacs buffers and child frames
+with views that are not text: views that a dynamic module draws with the
+GPU. Stock Emacs places, clips and hides only WebKit views; on macOS it
+leaves every xwidget view behind when a window scrolls by copying rows;
+and a chrome-less child frame that grows shows its new area black for a
+moment. Three local patches add a `native` xwidget type whose `NSView` a
+dynamic module supplies, make xwidget views follow scrolling as they do
+on X, and grow such a child frame in two steps. Why each patch is shaped
+the way it is, and what it leaves alone, is in
+[docs/local-patches.md](docs/local-patches.md).
+
+This repository is the application only: the source pin, the patches, the
+font, the build and the release. The bendmacs config, its widgets and
+their design records (how a widget is hosted, what it draws, how it is
+measured) are in [bendmacs](https://github.com/nohzafk/bendmacs). A
+change belongs here when it needs a different `Emacs.app`.
 
 ## What a release contains
 
@@ -129,6 +138,9 @@ or point `EMACS_FONT_FONTFORGE` at it.
   most common was 1200) and icons could come out two cells wide; 600 is the
   Latin advance.
   `--careful` keeps Rysana's own powerline glyphs.
+- bendmacs lays out diagram text assuming these advances: 600/1000 em for a
+  narrow glyph and 1200/1000 em for a wide one. A change to the cell width
+  breaks that layout, so coordinate it with bendmacs.
 - A change to the font, the patcher or the flags changes the bundle, so it
   needs a new `EMACS_BUILD_NUMBER`. A reused local `Emacs.app` without the
   fonts is refused.
@@ -186,15 +198,10 @@ at commit `6489a284d333119a05c9b0c2175bedf68250d160`.
   while the view holds its old frame and draws nothing, then applies the final
   frame 20 ms later and draws. Child-frame windows become non-opaque with a
   clear background for it; top-level and decorated frames are unchanged. NS
-  only; touches `src/nsterm.m`, `src/nsterm.h` and `src/nsfns.m`.
-
-  Titled windows do not show the band, so it cannot be reproduced with a
-  normal frame. A child frame that holds a layer-backed view of its own, such
-  as a `native` xwidget drawing with Metal, needs one more thing from that
-  view: Emacs's views are flipped, so the layer's `contentsGravity` must be
-  `kCAGravityBottomLeft` to stay pinned to the visual top while the frame
-  grows. With `kCAGravityTopLeft` the old contents are drawn against the
-  bottom edge and the whole view jumps down for a frame.
+  only; touches `src/nsterm.m`, `src/nsterm.h` and `src/nsfns.m`. Titled
+  windows do not show the band, so it cannot be reproduced with a normal
+  frame; what a layer-backed view in such a frame must do itself is in
+  [docs/local-patches.md](docs/local-patches.md).
 
 The obsolete emacs-28 **fix-window-role** patch is not applied: this
 revision already returns `NSAccessibilityWindowRole`, so the patch would fail
@@ -299,7 +306,7 @@ errors in terminal mode.
 - Commit: `a360712c9d272d950d8d8255ef74570f7e90b7d9`
 - Release: `emacs-31.1` (the upstream annotated tag points at this commit)
 - Label: `31-snapshot-a360712c9d272d950d8d8255ef74570f7e90b7d9`
-- Build number: `4`
+- Build number: `5`
 
 The shared helper fetches only this full commit SHA into a detached Git checkout.
 It does not follow `master`, an Emacs 31 branch, or the release tag itself: the

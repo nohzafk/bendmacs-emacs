@@ -1,12 +1,14 @@
-# The xwidget patches: why, and how
+# The local patches: why, and how
 
 This repository, bendmacs-emacs, ships the emacs-plus UI patches and, on
-top of them, a small set of local patches to Emacs's xwidget support on
-macOS. This document is the reasoning behind the local ones: what we
-wanted, what in Emacs stood in the way, what each patch changes and why it
-changes it that way. The README's *The patch set* lists what is applied;
-this file says why. The mechanics of applying patches (the lock file,
-SHA-256, `-F0`) are in the README and `scripts/emacs-patches.sh`.
+top of them, a small set of local patches: two to Emacs's xwidget support
+on macOS, and one to how a child frame grows, because that is where most
+of those views are shown. This document is the reasoning behind the local
+ones: what we wanted, what in Emacs stood in the way, what each patch
+changes and why it changes it that way. The README's *The patch set*
+lists what is applied; this file says why. The mechanics of applying
+patches (the lock file, SHA-256, `-F0`) are in the README and
+`scripts/emacs-patches.sh`.
 
 ## What we wanted
 
@@ -125,6 +127,71 @@ is selected by its widget's whole rectangle, not its clipped part, so a
 widget clipped to nothing, or sitting in a row partly outside the text
 area, moves with its row as well.
 
+## ns-child-frame-resize
+
+`patches/emacs-31/ns-child-frame-resize.patch`. NS only; touches
+`src/nsterm.m`, `src/nsterm.h` and `src/nsfns.m`. Applied last, after
+every patch above. Like `ns-xwidget-scroll`, it fixes stock Emacs, not
+something the `native` type introduced.
+
+**The defect.** bendmacs shows a status card (a `native` xwidget) in a
+focus-less, undecorated child frame that grows when the card asks for more
+height. When a window without a title bar grows through one
+`-[NSWindow setFrame:]`, the window server shows what was committed in
+that display frame at the window's new origin but clipped to its old size,
+until a commit lands in a later display frame. The added area is black:
+about 26 display frames per grow on the unpatched build. A titled window
+does not do this, so a normal frame cannot reproduce it. `display:YES`, a
+`CATransaction` flush, `-displayIfNeeded`, drawing before the resize, and
+changes to the layer's actions or `contentsGravity` did not help.
+
+**What it changes.** `ns_set_window_size` and
+`ns_set_window_size_and_position` grow a visible chrome-less child frame
+(no title bar, or a full-size content view) in two steps.
+`change_frame_size` still runs first, so Lisp sees the new size at once.
+
+1. The window takes the union of its current and its new size, at its
+   current origin, while the `EmacsView` is held at its old frame
+   (`childGrowHold`): `resizeWithOldSuperviewSize:` puts the view back and
+   `-[EmacsLayer display]` draws nothing, so nothing on screen changes.
+2. 20 ms later (`performSelector:afterDelay:0.02`, `childGrowStep2`) the
+   hold is cleared, the window takes its final frame, the view follows,
+   and Emacs redraws, so the new surface is committed in the display frame
+   in which the new area first shows.
+
+A new resize cancels a pending step 2 and starts again from the current
+window frame; deleting the frame cancels it. Shrinks, moves, top-level
+frames and decorated frames keep the single `-setFrame:`.
+
+**Why the child frame's window becomes clear.** Step 1 makes the window
+larger than its view, and that extension must not show. So the window of
+a child frame is non-opaque with a clear background:
+`ns_update_window_opacity` sets this, and sets or restores it when a frame
+gains or loses its parent; `ns_set_background_color` leaves a child
+frame's window alone. Top-level windows, undecorated ones included, keep
+their opacity and background.
+
+**Measured** on the Context card in bendmacs, ten clicks per build at
+60 fps: no black frame with the patch; 11 to 42 per click with the patch's
+hold removed, which is why the hold stays.
+
+**What it leaves.** During the about 20 ms of step 1 the `EmacsView` keeps
+its old frame, and a widget's view, a subview of it, is clipped to it. So
+the lower part of a growing card appears a frame or two late on most
+grows. The top edge does not move and nothing is black; by eye it reads as
+smooth. Turning off the view's clipping (`clipsToBounds`,
+`masksToBounds`) for the hold, and not deferring the xwidget's geometry
+during the hold, did not remove it. The cause is not established.
+
+**What a module's view needs beside it.** The patch removes only the
+macOS cause. A layer-backed view in such a frame has two more of its own,
+fixed in the module (emacs-egui), not here: Emacs's views are flipped, so
+a `CAMetalLayer`'s `contentsGravity` must be `kCAGravityBottomLeft` to stay
+at the visual top while the view grows; and a frame laid out for the size
+the view has asked for must not be presented before Emacs has resized the
+view. The whole story, with the harness and the measurements, is bendmacs's
+`docs/design/120-growing-child-frame.md`.
+
 ## What the patches do not do
 
 - They do not change what the module draws or how; that is the module's
@@ -137,8 +204,8 @@ area, moves with its row as well.
   nothing about. A candidate for a later patch.
 - They do not add the `xwidget-webkit-title-change-hook` that some
   WebKit-based packages listen on. It does not exist in stock Emacs, and
-  nothing here needs it: a page reaches Emacs through a loopback HTTP
-  request instead.
+  nothing here needs it. (bendmacs no longer uses WebKit xwidgets at all;
+  when it did, a page reached Emacs through a loopback HTTP request.)
 
 ## Upstream
 
@@ -146,7 +213,10 @@ The clipping fix and the double-kill fix are bugs in stock Emacs on
 current macOS and are the natural candidates to send to emacs-devel. The
 `native` type itself removes the one place where the xwidget machinery is
 hard-wired to WebKit, in about sixty lines; whether to propose it is
-open. The scroll-run port restores on macOS what X already does.
+open. The scroll-run port restores on macOS what X already does. The
+child-frame grow works around window-server behaviour rather than an Emacs
+bug, and the cause of its remaining one-or-two-frame clip is not
+established; whether to propose it is open.
 
 ## Verifying a change here
 
